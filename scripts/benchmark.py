@@ -10,7 +10,7 @@ def main():
     cfg = load_config()
     n = cfg["benchmark_rows"]
     rel = P._auth_rel(cfg["paths"]["auth_gz"])
-    con = duckdb.connect()
+    con = P.open_con()
 
     t = time.time()
     con.execute(

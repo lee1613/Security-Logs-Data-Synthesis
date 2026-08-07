@@ -1,4 +1,6 @@
+import os
 import pickle
+import tempfile
 
 import duckdb
 import numpy as np
@@ -7,6 +9,20 @@ import networkx as nx
 
 AUTH_COLS = ("time", "src_user", "dst_user", "src_computer", "dst_computer",
              "auth_type", "logon_type", "auth_orientation", "success")
+
+
+def open_con(temp_dir=None, memory_limit="4GB"):
+    """DuckDB connection configured for out-of-core aggregation over the ~1B-row
+    auth file: spill to a local temp dir (NOT the OneDrive tree) and cap RAM so
+    DuckDB spills instead of OOMing. Tests use a plain duckdb.connect() instead."""
+    if temp_dir is None:
+        temp_dir = os.path.join(tempfile.gettempdir(), "duckdb_day1")
+    os.makedirs(temp_dir, exist_ok=True)
+    con = duckdb.connect()
+    con.execute(f"SET temp_directory='{temp_dir.replace(chr(92), '/')}'")
+    con.execute(f"SET memory_limit='{memory_limit}'")
+    con.execute("SET preserve_insertion_order=false")
+    return con
 
 
 def _auth_rel(auth_path):

@@ -17,7 +17,7 @@ def _freeze_readonly(path):
 def main():
     cfg = load_config()
     p = cfg["paths"]
-    con = duckdb.connect()
+    con = P.open_con()
 
     print("[1/6] aggregates ...")
     edges = P.compute_edge_counts(con, p["auth_gz"])
