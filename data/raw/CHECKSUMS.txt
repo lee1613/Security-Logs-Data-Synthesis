@@ -1,0 +1,4 @@
+9c6b0cc261b0edd19324f6fd1839743224938a7f644ed202ca70bd70a89bf672 *data/raw/auth.txt.gz
+606635837c684ad11e464075ecf97bc5df325ff7d7f64614d2d8c8af18051669 *data/raw/redteam.txt.gz
+7626505158	data/raw/auth.txt.gz
+4846	data/raw/redteam.txt.gz
