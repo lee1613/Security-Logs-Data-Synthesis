@@ -22,6 +22,7 @@ def open_con(temp_dir=None, memory_limit="4GB"):
     con.execute(f"SET temp_directory='{temp_dir.replace(chr(92), '/')}'")
     con.execute(f"SET memory_limit='{memory_limit}'")
     con.execute("SET preserve_insertion_order=false")
+    con.execute("SET threads=2")  # fewer parallel partitions => lower peak temp spill
     return con
 
 
@@ -52,12 +53,16 @@ def compute_edge_counts(con, auth_path):
 
 def compute_user_host_counts(con, auth_path):
     # A credential is "seen on" a host if it appears as its source OR destination.
-    # UNNEST a 2-element list per row => both orientations in a single file scan.
+    # Aggregate each orientation to its (small) distinct result FIRST, then union —
+    # this avoids exploding the ~1B-row scan to ~2B rows (which overflows temp disk).
+    rel = _auth_rel(auth_path)
     return con.execute(
-        f"SELECT user, computer, COUNT(*) AS cnt FROM ("
-        f"  SELECT src_user AS user, "
-        f"         UNNEST([src_computer, dst_computer]) AS computer "
-        f"  FROM {_auth_rel(auth_path)}) GROUP BY user, computer"
+        f"SELECT user, computer, SUM(cnt) AS cnt FROM ("
+        f"  SELECT src_user AS user, src_computer AS computer, COUNT(*) AS cnt "
+        f"  FROM {rel} GROUP BY 1, 2 "
+        f"  UNION ALL "
+        f"  SELECT src_user AS user, dst_computer AS computer, COUNT(*) AS cnt "
+        f"  FROM {rel} GROUP BY 1, 2) GROUP BY user, computer"
     ).df()
 
 
