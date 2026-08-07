@@ -1,0 +1,32 @@
+seed: 42
+
+paths:
+  auth_gz: data/raw/auth.txt.gz
+  redteam_gz: data/raw/redteam.txt.gz
+  aggregates: data/derived/aggregates.pkl
+  graph: data/derived/graph.pkl
+  redteam_full: data/derived/redteam_full.csv
+  redteam_fit: data/derived/redteam_fit.csv
+  redteam_holdout: data/derived/redteam_holdout.csv
+  profile: data/derived/redteam_profile.json
+  target_validation: data/derived/target_validation.json
+
+campaign_gap_seconds: 14400   # 4h (SETTLED). 1h fallback = 3600.
+
+split:
+  fit_fraction: 0.70          # earliest 70% of the timeline goes to fit
+
+graph:
+  server_in_degree_percentile: 90   # top-decile in-degree ...
+  server_min_in_out_ratio: 3.0      # ... AND receives >> initiates
+  target_keep_ratio: 2.0            # keep is_server proxy if targets' median in-degree >= 2x all-hosts
+
+benchmark_rows: 10000000      # ~10M rows for the extrapolation
+expected_total_rows: 1050000000
+max_full_pass_hours: 4        # §5 fallback trigger
+collection_days: 58
+
+# Day-2 / Day-3 knobs, placed here now so the file is stable
+alpha: 1.0
+beta: 1.0
+base_rate: 0.0001
