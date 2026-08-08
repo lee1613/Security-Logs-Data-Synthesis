@@ -61,3 +61,40 @@ def harvest_credentials(foothold, host_users, max_creds, rng):
         idx = rng.choice(len(creds), size=max_creds, replace=False)
         creds = [creds[i] for i in idx]
     return set(creds)
+
+
+def generate_campaign(graph, host_users, dists, cands, cp, rng,
+                      alpha, beta, credential_bonus, max_creds):
+    """One fan-out campaign. Returns (events, capped) where events is a list of
+    (dt_offset, user, foothold, target); or (None, False) to signal a discard."""
+    foothold = pick_foothold(cands, cp, rng)
+    compromised = harvest_credentials(foothold, host_users, max_creds, rng)
+    targets = list(graph.successors(foothold))
+    if not compromised or not targets:
+        return None, False
+
+    k = int(rng.choice(dists["breadth"]))
+    capped = k > len(targets)
+    k = min(k, len(targets))
+
+    # candidate weights: edge_weight^alpha * (in_degree+1)^beta * credential_bonus
+    weights = np.empty(len(targets), dtype=float)
+    for i, t in enumerate(targets):
+        edge_w = float(graph[foothold][t]["weight"])
+        indeg = float(graph.nodes[t]["in_degree"])
+        bonus = credential_bonus if (host_users.get(t, set()) & compromised) else 1.0
+        weights[i] = (edge_w ** alpha) * ((indeg + 1.0) ** beta) * bonus
+    p = weights / weights.sum()
+
+    idx = rng.choice(len(targets), size=k, replace=False, p=p)
+    chosen = [targets[i] for i in idx]
+
+    dts = rng.choice(dists["inter_event_dt"], size=k)
+    offsets = np.cumsum(dts)
+
+    events = []
+    for off, t in zip(offsets, chosen):
+        pool = list(host_users.get(t, set()) & compromised) or list(compromised)
+        user = pool[rng.integers(len(pool))]
+        events.append((int(off), user, foothold, t))
+    return events, capped

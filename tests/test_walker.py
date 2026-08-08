@@ -68,3 +68,56 @@ def test_harvest_credentials_caps():
     assert got <= host_users["F"]
     # no creds seen -> empty set
     assert W.harvest_credentials("X", host_users, max_creds=4, rng=_rng()) == set()
+
+
+def _graph_with_targets():
+    g = nx.DiGraph()
+    for dst, w in [("T1", 5), ("T2", 1), ("T3", 3)]:
+        g.add_edge("F", dst, weight=w)
+    # set in_degree node attrs the weighting reads
+    for n in g.nodes:
+        g.nodes[n]["in_degree"] = {"T1": 10, "T2": 2, "T3": 7}.get(n, 0)
+    return g
+
+
+def test_generate_campaign_valid_edges_and_creds():
+    g = _graph_with_targets()
+    host_users = {"F": {"U1@D", "U2@D"}, "T1": {"U1@D"}, "T2": {"U9@D"}, "T3": {"U2@D"}}
+    dists = {"breadth": [3], "creds_per_campaign": [2], "inter_event_dt": [60, 90]}
+    cands, cp = W.foothold_candidates(g, min_out_degree=1)  # only F qualifies
+    events, capped = W.generate_campaign(
+        g, host_users, dists, cands, cp, _rng(),
+        alpha=1.0, beta=1.0, credential_bonus=2.0, max_creds=60)
+    assert capped is False
+    assert len(events) == 3                       # breadth 3, F has 3 targets
+    for off, user, src, dst in events:
+        assert src == "F"
+        assert g.has_edge(src, dst)               # V1: every edge real
+        assert user in {"U1@D", "U2@D"}           # only compromised creds used
+        assert off > 0
+    # strictly increasing offsets (Δt > 0)
+    offs = [e[0] for e in events]
+    assert offs == sorted(offs) and len(set(offs)) == len(offs)
+
+
+def test_generate_campaign_caps_breadth_at_out_degree():
+    g = _graph_with_targets()  # F has 3 targets
+    host_users = {"F": {"U1@D"}, "T1": {"U1@D"}, "T2": {"U1@D"}, "T3": {"U1@D"}}
+    dists = {"breadth": [10], "creds_per_campaign": [1], "inter_event_dt": [60]}
+    cands, cp = W.foothold_candidates(g, min_out_degree=1)
+    events, capped = W.generate_campaign(
+        g, host_users, dists, cands, cp, _rng(),
+        alpha=1.0, beta=1.0, credential_bonus=2.0, max_creds=60)
+    assert capped is True
+    assert len(events) == 3                        # capped at out-degree 3
+
+
+def test_generate_campaign_discards_when_no_creds():
+    g = _graph_with_targets()
+    host_users = {"T1": {"U1@D"}}                  # F has no creds seen
+    dists = {"breadth": [2], "creds_per_campaign": [1], "inter_event_dt": [60]}
+    cands, cp = W.foothold_candidates(g, min_out_degree=1)
+    events, capped = W.generate_campaign(
+        g, host_users, dists, cands, cp, _rng(),
+        alpha=1.0, beta=1.0, credential_bonus=2.0, max_creds=60)
+    assert events is None and capped is False
