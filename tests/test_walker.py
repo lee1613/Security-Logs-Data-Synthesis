@@ -34,3 +34,37 @@ def test_build_host_users():
     m = W.build_host_users(uh)
     assert m["C1"] == {"U1@D", "U2@D"}
     assert m["C2"] == {"U1@D"}
+
+
+def _rng():
+    return np.random.default_rng(42)
+
+
+def test_pick_foothold_prefers_high_out_degree():
+    g = nx.DiGraph()
+    g.add_edge("F", "A"); g.add_edge("F", "B"); g.add_edge("F", "C")  # out 3
+    g.add_edge("S", "A")                                              # out 1
+    cands, cp = W.foothold_candidates(g, min_out_degree=1)
+    assert set(cands) == {"F", "S"}
+    # F has 3x the out-degree of S -> 0.75 vs 0.25 probability
+    pF = cp[cands.index("F")]
+    assert abs(pF - 0.75) < 1e-9
+    pick = W.pick_foothold(cands, cp, _rng())
+    assert pick in cands
+
+
+def test_foothold_candidates_threshold_excludes_small():
+    g = nx.DiGraph()
+    g.add_edge("F", "A"); g.add_edge("F", "B")  # out 2
+    g.add_edge("S", "A")                         # out 1
+    cands, _ = W.foothold_candidates(g, min_out_degree=2)
+    assert cands == ["F"]
+
+
+def test_harvest_credentials_caps():
+    host_users = {"F": {f"U{i}@D" for i in range(10)}}
+    got = W.harvest_credentials("F", host_users, max_creds=4, rng=_rng())
+    assert len(got) == 4
+    assert got <= host_users["F"]
+    # no creds seen -> empty set
+    assert W.harvest_credentials("X", host_users, max_creds=4, rng=_rng()) == set()

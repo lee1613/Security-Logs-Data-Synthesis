@@ -39,3 +39,25 @@ def build_host_users(user_host_df):
     for u, c in zip(user_host_df["user"], user_host_df["computer"]):
         m.setdefault(c, set()).add(u)
     return m
+
+
+def foothold_candidates(graph, min_out_degree):
+    """Precompute (once) the foothold pool and out-degree-proportional
+    probabilities. Called by the corpus loop, not per campaign."""
+    cands = [n for n in graph.nodes if graph.out_degree(n) >= min_out_degree]
+    w = np.array([graph.out_degree(n) for n in cands], dtype=float)
+    cp = w / w.sum()
+    return cands, cp
+
+
+def pick_foothold(cands, cp, rng):
+    return cands[rng.choice(len(cands), p=cp)]
+
+
+def harvest_credentials(foothold, host_users, max_creds, rng):
+    """Credentials observed on the foothold, capped. Empty set if none."""
+    creds = list(host_users.get(foothold, set()))
+    if len(creds) > max_creds:
+        idx = rng.choice(len(creds), size=max_creds, replace=False)
+        creds = [creds[i] for i in idx]
+    return set(creds)
