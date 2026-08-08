@@ -30,3 +30,11 @@ collection_days: 58
 alpha: 1.0
 beta: 1.0
 base_rate: 0.0001
+
+# Day-2 fan-out generator knobs
+fanout:
+  min_foothold_out_degree: 25   # a foothold must have >= this many real out-edges
+                                # (smallest real red-team seed out-degree ~29)
+  max_harvest_creds: 60         # cap credentials pulled from a foothold (real max ~45)
+  credential_bonus: 2.0         # multiplier for a target where a compromised cred is seen
+  n_campaigns: 10000            # corpus size for the Day-2 scale run / exit criterion
