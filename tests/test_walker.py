@@ -121,3 +121,20 @@ def test_generate_campaign_discards_when_no_creds():
         g, host_users, dists, cands, cp, _rng(),
         alpha=1.0, beta=1.0, credential_bonus=2.0, max_creds=60)
     assert events is None and capped is False
+
+
+def test_generate_corpus_stats_and_validity():
+    g = _graph_with_targets()
+    host_users = {"F": {"U1@D", "U2@D"}, "T1": {"U1@D"}, "T2": {"U9@D"}, "T3": {"U2@D"}}
+    dists = {"breadth": [2, 3], "creds_per_campaign": [2], "inter_event_dt": [60, 90]}
+    campaigns, stats = W.generate_corpus(
+        g, host_users, dists, n=50, alpha=1.0, beta=1.0,
+        credential_bonus=2.0, min_out_degree=1, max_creds=60, seed=42)
+    assert len(campaigns) == 50
+    assert stats["n"] == 50
+    assert 0.0 <= stats["discard_rate"] <= 1.0
+    assert 0.0 <= stats["cap_rate"] <= 1.0
+    # V1: every generated edge exists in the graph
+    for camp in campaigns:
+        for _, _, src, dst in camp:
+            assert g.has_edge(src, dst)

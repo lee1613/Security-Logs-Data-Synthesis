@@ -98,3 +98,40 @@ def generate_campaign(graph, host_users, dists, cands, cp, rng,
         user = pool[rng.integers(len(pool))]
         events.append((int(off), user, foothold, t))
     return events, capped
+
+
+def generate_corpus(graph, host_users, dists, n, alpha, beta,
+                    credential_bonus, min_out_degree, max_creds, seed):
+    """Generate n valid fan-out campaigns. Foothold pool precomputed once.
+    Returns (campaigns, stats) with discard_rate and cap_rate logged."""
+    rng = np.random.default_rng(seed)
+    cands, cp = foothold_candidates(graph, min_out_degree)
+    if not cands:
+        raise ValueError(f"no foothold has out-degree >= {min_out_degree}")
+
+    campaigns, discards, caps, attempts = [], 0, 0, 0
+    max_attempts = n * 10  # ponytail: bounded so a pathological graph can't spin forever
+    while len(campaigns) < n and attempts < max_attempts:
+        attempts += 1
+        events, capped = generate_campaign(
+            graph, host_users, dists, cands, cp, rng,
+            alpha, beta, credential_bonus, max_creds)
+        if events is None:
+            discards += 1
+            continue
+        if capped:
+            caps += 1
+        campaigns.append(events)
+
+    stats = {
+        "n": len(campaigns),
+        "attempts": attempts,
+        "discard_rate": discards / max(attempts, 1),
+        "cap_rate": caps / max(len(campaigns), 1),
+    }
+    return campaigns, stats
+
+
+def save_campaigns(campaigns, path):
+    with open(path, "wb") as f:
+        pickle.dump(campaigns, f)
