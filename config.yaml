@@ -38,3 +38,18 @@ fanout:
   max_harvest_creds: 60         # cap credentials pulled from a foothold (real max ~45)
   credential_bonus: 2.0         # multiplier for a target where a compromised cred is seen
   n_campaigns: 10000            # corpus size for the Day-2 scale run / exit criterion
+
+# Day-3 writer / benign / mixed-corpus knobs
+day3:
+  synth_auth: data/derived/synth_auth.csv
+  synth_labels: data/derived/synth_labels.csv
+  benign_fit: data/derived/benign_fit.csv
+  benign_holdout: data/derived/benign_holdout.csv
+  fit_window: [0, 1758226]          # benign train negatives: time <= fit max
+  holdout_window: [1847858, 2557047] # benign test negatives: holdout span
+  benign_n: 1500000                  # random benign rows per window
+  collection_seconds: 5011200        # 58-day window; campaign start kept inside it
+  base_rates:                        # malicious:benign ratios for the mixed-corpus sweep
+    - {name: "1e2", rate: 0.01}
+    - {name: "1e3", rate: 0.001}
+    - {name: "1e4", rate: 0.0001}
