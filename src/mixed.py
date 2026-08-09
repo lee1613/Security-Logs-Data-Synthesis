@@ -9,17 +9,23 @@ _LABEL_COLS = ["row_id", "is_malicious", "campaign_id", "hop_index"]
 
 
 def build_mixed_corpus(mal_df, benign_df, rate, seed):
-    """rate = malicious:benign. Down-sample benign to n_benign = n_mal / rate,
-    concat, sort by time. Returns (mixed_auth_df, labels_df), row-aligned."""
+    """rate = malicious:benign. Shrink whichever class is over target (never
+    upsample): if rate*len(benign) <= len(mal), hold benign full and down-sample
+    malicious to rate*n_benign (the real Day-3 regime — abundant malicious);
+    otherwise hold malicious full and down-sample benign to n_mal/rate. Concat,
+    sort by time. Returns (mixed_auth_df, labels_df), row-aligned."""
     rng = np.random.default_rng(seed)
-    n_mal = len(mal_df)
-    n_benign = min(len(benign_df), int(round(n_mal / rate)))
-    idx = rng.choice(len(benign_df), size=n_benign, replace=False)
-    benign = benign_df.iloc[idx].copy()
+    n_m, n_b = len(mal_df), len(benign_df)
+    if rate * n_b <= n_m:
+        n_benign, n_mal = n_b, int(round(rate * n_b))
+    else:
+        n_mal, n_benign = n_m, min(n_b, int(round(n_m / rate)))
 
-    mal = mal_df[Wr.AUTH_FIELDS].copy()
+    mi = rng.choice(n_m, size=n_mal, replace=False)
+    bi = rng.choice(n_b, size=n_benign, replace=False)
+    mal = mal_df.iloc[mi][Wr.AUTH_FIELDS].copy()
     mal["is_malicious"] = 1
-    benign = benign[Wr.AUTH_FIELDS].copy()
+    benign = benign_df.iloc[bi][Wr.AUTH_FIELDS].copy()
     benign["is_malicious"] = 0
 
     mixed = pd.concat([mal, benign], ignore_index=True)

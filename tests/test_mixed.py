@@ -19,6 +19,19 @@ def _benign_rows(n):
         for i in range(n)])
 
 
+def test_build_mixed_corpus_downsamples_malicious_when_abundant():
+    # real Day-3 regime: malicious events >> what the target rate allows into benign
+    mal = _mal_rows(1000)
+    benign = _benign_rows(100000)
+    mixed, labels = M.build_mixed_corpus(mal, benign, rate=0.001, seed=3)
+    n_mal = int((labels["is_malicious"] == 1).sum())
+    n_ben = int((labels["is_malicious"] == 0).sum())
+    assert n_ben == 100000                       # benign held at full pool
+    assert abs(n_mal - 100) <= 1                  # mal down-sampled to rate*benign = 100
+    assert len(mixed) == len(labels)
+    assert list(mixed["time"]) == sorted(mixed["time"])
+
+
 def test_build_mixed_corpus_hits_rate_and_aligns_labels():
     mal = _mal_rows(10)
     benign = _benign_rows(100000)
