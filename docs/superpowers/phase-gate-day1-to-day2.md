@@ -39,3 +39,19 @@
 - Re-derive the profile field consumed by Day 2: use **per-campaign dst-count (breadth)** distribution, not events-per-campaign-as-depth.
 - Dead-end guard rail still applies per emitted edge, but breadth-based generation dead-ends far less than deep paths.
 - Day-3 attribute layer shrinks to a constant emitter + Δt bootstrap.
+
+## Day-2 EXECUTED (2026-08-09) — result + open gaps for the Day-3 gate
+
+**Status:** Day-2 fan-out generator built (`src/walker.py`), merged to `main`. All exit criteria PASS on real data: 10k campaigns / 33.7s, **0** edges out of graph, cap_rate 0.187 (<0.2), synth breadth median=9 / max=168 both exactly matching the real fit split (both mega-fan-outs 168/88 reproduced). 19/19 tests pass.
+
+**What Day-2 is:** empirical-resample (breadth + Δt drawn directly from the 13 fit campaigns) + hard "every edge is real" graph constraint + hand-set weighting `edge_w^alpha × (indeg+1)^beta × credential_bonus`. **No training** — alpha=beta=1.0, credential_bonus=2.0 are default priors, not fitted.
+
+**Four open gaps surfaced by grilling — carry into Day-3/Day-4, none block Day-2:**
+
+1. **Credential semantics are a proxy, not replay.** A "credential" = the anonymized `src_user` account (`U####@DOM`), not a password/hash. Reuse is *real and measured* (campaign 5: 261 events / 168 targets / **45 distinct accounts** — few creds sprayed across many hosts, directly observed in the log). BUT the generator does **not** replay real account→target pairings: `harvest_credentials` reads `user_host` (built from **benign** `auth.txt`) as a proxy for "accounts harvestable on the foothold," and assigns per target via `host_users[t] ∩ compromised`. So reuse *statistics* are real; specific cred→target *assignments* are invented from benign co-occurrence. Assumption to state in the writeup: *account presence in normal logs ≈ what an attacker could steal.*
+
+2. **`creds_per_campaign` measured but NOT enforced in generation.** Distinct-credential count per campaign `[45,39,22,13,12,4,4,2,2,2,1,1,1]` is computed and thrown away (labelled "Day-4 fidelity check"). Emitted distinct-user count is emergent. → Fix: after sampling breadth `k`, also sample cred-count `m` from this distribution, restrict harvest pool to `m`, so reuse *intensity* (few creds↔many targets vs many creds) matches real.
+
+3. **Foothold pool too wide vs. observed seeds.** Real footholds = **4 hosts**, one dominant: C17693 (out-deg 534, 9 of 13 campaigns incl. both mega), plus C19932/C22409 (~30). Generator samples ∝ out-degree from **all 17,666** nodes with out-deg≥25 — preserves "high-out-degree dominates" but *invents footholds that never attacked.* `seed_hosts` is already in the profile. Gate decision: keep broad (generalize) vs. pin to observed seeds (mimic this operator).
+
+4. **No wall-clock / hour-of-day placement — Day-3 job.** Events are `(dt_offset, user, src, dst)`, `dt_offset` = seconds from campaign start (0-based). *Relative* spacing IS captured (Δt bootstrap → reproduces the real low-and-slow spread: 261 events over 13.6h, 0.3 ev/min, NOT a post-login burst). *Absolute* placement is NOT: no date/hour/weekday. Real attacks fired in **business hours (LANL hr 6–17)** — deliberate blend-in. Day-1 captured the `hourly` aggregate but Day-2 doesn't consume it. → Day-3: map `dt_offset` → wall-clock by sampling campaign start from the real `hourly` distribution.
