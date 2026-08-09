@@ -123,6 +123,20 @@ def test_generate_campaign_discards_when_no_creds():
     assert events is None and capped is False
 
 
+def test_generate_campaign_restricts_to_sampled_cred_count():
+    g = _graph_with_targets()
+    # foothold F has 5 creds available, but creds_per_campaign says a campaign uses 2
+    host_users = {"F": {f"U{i}@D" for i in range(5)},
+                  "T1": {"U0@D"}, "T2": {"U1@D"}, "T3": {"U2@D"}}
+    dists = {"breadth": [3], "creds_per_campaign": [2], "inter_event_dt": [60]}
+    cands, cp = W.foothold_candidates(g, min_out_degree=1)
+    events, _ = W.generate_campaign(
+        g, host_users, dists, cands, cp, _rng(),
+        alpha=1.0, beta=1.0, credential_bonus=2.0, max_creds=60)
+    assert events is not None
+    assert len({user for _, user, _, _ in events}) <= 2   # never more than sampled m
+
+
 def test_generate_corpus_stats_and_validity():
     g = _graph_with_targets()
     host_users = {"F": {"U1@D", "U2@D"}, "T1": {"U1@D"}, "T2": {"U9@D"}, "T3": {"U2@D"}}

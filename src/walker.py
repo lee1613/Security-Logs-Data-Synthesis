@@ -73,6 +73,13 @@ def generate_campaign(graph, host_users, dists, cands, cp, rng,
     if not compromised or not targets:
         return None, False
 
+    # gap #2 fix: reuse-intensity matches the fit split — restrict to m sampled creds
+    m = int(rng.choice(dists["creds_per_campaign"]))
+    comp_list = list(compromised)
+    if 0 < m < len(comp_list):
+        idx = rng.choice(len(comp_list), size=m, replace=False)
+        compromised = {comp_list[i] for i in idx}
+
     k = int(rng.choice(dists["breadth"]))
     capped = k > len(targets)
     k = min(k, len(targets))
