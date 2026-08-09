@@ -42,3 +42,36 @@ def sample_start_time(hourly_df, rng, max_offset, collection_seconds):
 def place_campaign(events, start):
     """Shift relative (dt_offset, user, src, dst) events to absolute time."""
     return [(int(start + off), user, src, dst) for off, user, src, dst in events]
+
+
+def campaign_to_rows(placed_events, campaign_id, row_id_start):
+    """Placed campaign -> (auth row dicts, label dicts). Constant attributes;
+    hop_index = within-campaign emission order (fan-out has no real hops)."""
+    rows, labels = [], []
+    for i, (t, user, src, dst) in enumerate(placed_events):
+        rid = row_id_start + i
+        rows.append({
+            "time": int(t), "src_user": user, "dst_user": user,
+            "src_computer": src, "dst_computer": dst,
+            "auth_type": AUTH_TYPE, "logon_type": LOGON_TYPE,
+            "auth_orientation": AUTH_ORIENTATION, "success": SUCCESS,
+        })
+        labels.append({"row_id": rid, "is_malicious": 1,
+                       "campaign_id": int(campaign_id), "hop_index": i})
+    return rows, labels
+
+
+def write_auth_csv(rows, path):
+    """Headerless, exact AUTH_FIELDS order (LANL auth.txt has no header)."""
+    with open(path, "w", newline="") as f:
+        w = csv.writer(f)
+        for r in rows:
+            w.writerow([r[k] for k in AUTH_FIELDS])
+
+
+def write_labels_csv(labels, path):
+    """Headed labels file, row-aligned to the auth file by row_id."""
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=LABEL_FIELDS)
+        w.writeheader()
+        w.writerows(labels)
