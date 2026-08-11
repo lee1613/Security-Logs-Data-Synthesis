@@ -59,6 +59,20 @@ day4:
   scarcity_k: [1, 2, 4, 8, 13]      # k real red-team FIT campaigns drawn per seed, out of 13 (scarcity curve)
   n_seeds: 5                         # random seeds per k-value (reproducibility)
 
+  # Synthetic budget per scarcity point. HELD CONSTANT across every k and every
+  # seed on purpose: if the corpus size tracked k, the curve would confound "less
+  # real data" with "less synthetic data" and stop isolating k. 1,000 campaigns
+  # regenerates in a few seconds and yields ~14k synthetic positives against 650
+  # real ones at k=13 -- a realistic augmentation regime.
+  synth_campaigns_per_point: 1000
+
+  # Hard negatives recovered by scripts/recover_hard_negatives.py. Day-3's benign
+  # sampler deleted every benign row on a red-team edge, making the classes
+  # edge-disjoint by construction (GBT AUC-PR 0.999, an artifact). These files
+  # put them back and MUST be merged into every Day-4 negative set.
+  hard_neg_fit: data/derived/hard_neg_fit.csv
+  hard_neg_holdout: data/derived/hard_neg_holdout.csv
+
   # Holdout base-rate sweep (test-time axis): rebalance holdout benign to hit ratios.
   # null = natural floor (all 204,228 holdout benign; ~1:4000 ratio).
   # Always keep all 51 real holdout positives.
