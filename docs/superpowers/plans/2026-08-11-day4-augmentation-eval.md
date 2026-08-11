@@ -30,6 +30,22 @@
 
 **Leakage rule (absolute):** every feature is computed from the **benign graph + fit split only**. The holdout is touched exactly once, at evaluation. Any feature derived from holdout data is a bug.
 
+**Tech stack:** Python 3.11 + `requirements.txt` (already installed): scikit-learn 1.5 (GBT, logistic, `average_precision_score`, PR curve), scipy 1.14 (KS test), matplotlib 3.9 (figures), pandas, numpy, networkx, pyyaml. Reuses `src/config.py`, `src/parse.py` (`AUTH_COLS`, `load_graph`), `src/walker.py`, `src/writer.py`.
+
+**Background (read for rationale, not instructions):** `docs/superpowers/phase-gate-day1-to-day2.md` — carries the Day-1→Day-3 gate history: the five open gaps (#1 cred→target proxy, #2 creds-per-campaign *fixed*, #3 broad foothold pool *kept deliberately*, #5 multi-origin *deferred*), Caveats A (benign under-delivery) and B (business-hour drift 0.55), and the README framing corrections. `SPEC_synthetic_lateral_movement.md` §3 DAY 4 carries the V1/V2/V3 exit criteria this plan satisfies.
+
+### Label construction (get this wrong and every number is silently corrupt)
+
+| Role | Source | Label |
+|---|---|---|
+| Real train positives | `data/derived/redteam_fit.csv` (13 campaigns, 650 events; `campaign_id` column drives the scarcity subset draw) | 1 |
+| Synth train positives | regenerated per scarcity point (Task 4); Day-3's `synth_auth.csv` is the all-13 corpus used for novelty/V2 only | 1 |
+| Train negatives | `data/derived/benign_fit.csv` (483,764) | 0 |
+| **Eval positives** | `data/derived/redteam_holdout.csv` (**51 events / 6 campaigns**) | 1 |
+| **Eval negatives** | `data/derived/benign_holdout.csv` (204,228; down-sampled for the base-rate sweep, positives never dropped) | 0 |
+
+Red-team CSVs are headed and already in `AUTH_COLS` order (plus `campaign_id`); `benign_*.csv` are headed `AUTH_COLS`; `synth_auth.csv` is **headerless** `AUTH_COLS`. Never mix a fit-side file into an eval set, or an eval-side file into training.
+
 ---
 
 ## Settled decisions (from the grilling checkpoint — encoded, not open)
