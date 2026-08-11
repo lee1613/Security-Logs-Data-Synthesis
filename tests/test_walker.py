@@ -1,3 +1,5 @@
+import hashlib
+
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -152,3 +154,108 @@ def test_generate_corpus_stats_and_validity():
     for camp in campaigns:
         for _, _, src, dst in camp:
             assert g.has_edge(src, dst)
+
+
+# --- Day-4 Task 5 baseline #2: naive uniform fan-out --------------------------
+#
+# The naive flag exists to isolate the WEIGHTING and CREDENTIAL layers. With it
+# on (and alpha=beta=0, credential_bonus=1.0 from the caller) the generator still
+# picks footholds by out-degree, still samples breadth from the fit split, and
+# still only emits real graph edges -- so campaign size and shape are controlled
+# and the only thing that changed is how targets are weighted and how users are
+# assigned. With it OFF nothing may move at all; that is what the golden below
+# is for.
+
+def _naive_graph():
+    g = nx.DiGraph()
+    for i, w in enumerate([5, 1, 3, 2, 7, 4]):
+        g.add_edge("F", f"T{i}", weight=w)
+    for n in g.nodes:
+        g.nodes[n]["in_degree"] = {"T0": 10, "T1": 2, "T2": 7,
+                                   "T3": 1, "T4": 30, "T5": 5}.get(n, 0)
+    return g
+
+
+# Captured from the generator BEFORE the naive flag existed. Hashes the
+# (offset, foothold, target) projection rather than the full events: the user
+# picked out of a Python set depends on str hash randomisation across processes,
+# so only the structural part is reproducible enough to pin.
+_PRE_NAIVE_SHA256 = "920940ce6cab9b4ef6fef63fadb2641c83335f0d9dfd9c9a1a9be7f6a009d3db"
+
+
+def test_flag_off_reproduces_the_pre_naive_corpus_byte_for_byte():
+    g = _naive_graph()
+    # no target carries a harvested credential, so credential_bonus never fires
+    # and target selection cannot depend on set iteration order
+    host_users = {"F": {f"U{i}@D" for i in range(6)},
+                  **{f"T{i}": {f"X{i}@D"} for i in range(6)}}
+    dists = {"breadth": [2, 3, 4], "creds_per_campaign": [1, 2, 3],
+             "inter_event_dt": [60, 90, 120]}
+    campaigns, stats = W.generate_corpus(
+        g, host_users, dists, n=40, alpha=1.0, beta=1.0, credential_bonus=2.0,
+        min_out_degree=1, max_creds=60, seed=42)
+    structural = repr([[(o, f, t) for o, _, f, t in c] for c in campaigns])
+    assert hashlib.sha256(structural.encode()).hexdigest() == _PRE_NAIVE_SHA256
+    assert stats == {"n": 40, "attempts": 40, "discard_rate": 0.0, "cap_rate": 0.0}
+
+
+def test_naive_target_weights_are_uniform_and_tuned_ones_are_not():
+    g = _naive_graph()
+    targets = list(g.successors("F"))
+    host_users = {"T0": {"U0@D"}}          # T0 would earn the credential bonus
+    compromised = {"U0@D"}
+
+    flat = W.target_weights(g, "F", targets, host_users, compromised,
+                            alpha=0.0, beta=0.0, credential_bonus=1.0)
+    assert np.allclose(flat, 1.0 / len(targets))
+
+    tuned = W.target_weights(g, "F", targets, host_users, compromised,
+                             alpha=1.0, beta=1.0, credential_bonus=2.0)
+    assert not np.allclose(tuned, tuned[0])          # the weighting really bites
+    assert abs(tuned.sum() - 1.0) < 1e-12
+
+
+def _naive_corpus(naive, host_users, creds=1, seed=7):
+    """Six targets and every harvestable cred available. creds=1 makes the
+    creds-per-campaign restriction visible per campaign; creds=6 (>= the pool)
+    disables it, isolating the user-assignment difference."""
+    dists = {"breadth": [6], "creds_per_campaign": [creds], "inter_event_dt": [60]}
+    kw = (dict(alpha=0.0, beta=0.0, credential_bonus=1.0) if naive
+          else dict(alpha=1.0, beta=1.0, credential_bonus=2.0))
+    campaigns, _ = W.generate_corpus(
+        _naive_graph(), host_users, dists, n=30, min_out_degree=1,
+        max_creds=60, seed=seed, naive=naive, **kw)
+    return campaigns
+
+
+def test_naive_skips_the_creds_per_campaign_restriction():
+    # no target intersects the compromised pool, so both modes fall back to the
+    # full pool for user assignment -- the ONLY difference left is the restriction
+    host_users = {"F": {f"U{i}@D" for i in range(5)},
+                  **{f"T{i}": {f"X{i}@D"} for i in range(6)}}
+    per_campaign = lambda cs: [len({u for _, u, _, _ in c}) for c in cs]
+
+    assert set(per_campaign(_naive_corpus(False, host_users))) == {1}   # m = 1
+    assert max(per_campaign(_naive_corpus(True, host_users))) > 1       # unrestricted
+
+
+def test_naive_draws_users_from_the_whole_compromised_pool():
+    # every target carries exactly one of the harvested creds, so the tuned path
+    # (intersect with the target's own users) is forced to that one user.
+    # creds=6 >= the pool size, so the restriction is a no-op in BOTH modes and
+    # user assignment is the only thing left that can differ.
+    host_users = {"F": {f"U{i}@D" for i in range(6)},
+                  **{f"T{i}": {f"U{i}@D"} for i in range(6)}}
+    off_target = lambda cs: sum(u != f"U{t[1:]}@D" for c in cs for _, u, _, t in c)
+
+    assert off_target(_naive_corpus(False, host_users, creds=6)) == 0   # local user
+    assert off_target(_naive_corpus(True, host_users, creds=6)) > 0     # whole pool
+
+
+def test_naive_corpus_still_honours_the_v1_edge_constraint():
+    host_users = {"F": {f"U{i}@D" for i in range(5)},
+                  **{f"T{i}": {f"X{i}@D"} for i in range(6)}}
+    g = _naive_graph()
+    campaigns = _naive_corpus(True, host_users)
+    assert len(campaigns) == 30
+    assert all(g.has_edge(s, t) for c in campaigns for _, _, s, t in c)

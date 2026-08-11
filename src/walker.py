@@ -63,36 +63,52 @@ def harvest_credentials(foothold, host_users, max_creds, rng):
     return set(creds)
 
 
-def generate_campaign(graph, host_users, dists, cands, cp, rng,
-                      alpha, beta, credential_bonus, max_creds):
-    """One fan-out campaign. Returns (events, capped) where events is a list of
-    (dt_offset, user, foothold, target); or (None, False) to signal a discard."""
-    foothold = pick_foothold(cands, cp, rng)
-    compromised = harvest_credentials(foothold, host_users, max_creds, rng)
-    targets = list(graph.successors(foothold))
-    if not compromised or not targets:
-        return None, False
-
-    # gap #2 fix: reuse-intensity matches the fit split — restrict to m sampled creds
-    m = int(rng.choice(dists["creds_per_campaign"]))
-    comp_list = list(compromised)
-    if 0 < m < len(comp_list):
-        idx = rng.choice(len(comp_list), size=m, replace=False)
-        compromised = {comp_list[i] for i in idx}
-
-    k = int(rng.choice(dists["breadth"]))
-    capped = k > len(targets)
-    k = min(k, len(targets))
-
-    # candidate weights: edge_weight^alpha * (in_degree+1)^beta * credential_bonus
+def target_weights(graph, foothold, targets, host_users, compromised,
+                   alpha, beta, credential_bonus):
+    """Target selection probabilities over a foothold's REAL out-edges:
+    edge_weight^alpha * (in_degree+1)^beta * credential_bonus, normalized.
+    With alpha=beta=0 and credential_bonus=1.0 every weight is 1.0 and the vector
+    is exactly uniform -- that is Day-4 baseline #2's naive fan-out."""
     weights = np.empty(len(targets), dtype=float)
     for i, t in enumerate(targets):
         edge_w = float(graph[foothold][t]["weight"])
         indeg = float(graph.nodes[t]["in_degree"])
         bonus = credential_bonus if (host_users.get(t, set()) & compromised) else 1.0
         weights[i] = (edge_w ** alpha) * ((indeg + 1.0) ** beta) * bonus
-    p = weights / weights.sum()
+    return weights / weights.sum()
 
+
+def generate_campaign(graph, host_users, dists, cands, cp, rng,
+                      alpha, beta, credential_bonus, max_creds, naive=False):
+    """One fan-out campaign. Returns (events, capped) where events is a list of
+    (dt_offset, user, foothold, target); or (None, False) to signal a discard.
+
+    `naive` is the Day-4 baseline #2 switch and is OFF by default -- with it off
+    this function is byte-identical to the pre-Day-4 generator. On, it drops the
+    two CREDENTIAL-layer behaviours (the creds-per-campaign restriction and the
+    preference for a user already seen on the target) while leaving footholds,
+    breadth and the V1 real-edge constraint alone. The WEIGHTING layer is turned
+    off by the caller passing alpha=beta=0 and credential_bonus=1.0."""
+    foothold = pick_foothold(cands, cp, rng)
+    compromised = harvest_credentials(foothold, host_users, max_creds, rng)
+    targets = list(graph.successors(foothold))
+    if not compromised or not targets:
+        return None, False
+
+    if not naive:
+        # gap #2 fix: reuse-intensity matches the fit split — restrict to m sampled creds
+        m = int(rng.choice(dists["creds_per_campaign"]))
+        comp_list = list(compromised)
+        if 0 < m < len(comp_list):
+            idx = rng.choice(len(comp_list), size=m, replace=False)
+            compromised = {comp_list[i] for i in idx}
+
+    k = int(rng.choice(dists["breadth"]))
+    capped = k > len(targets)
+    k = min(k, len(targets))
+
+    p = target_weights(graph, foothold, targets, host_users, compromised,
+                       alpha, beta, credential_bonus)
     idx = rng.choice(len(targets), size=k, replace=False, p=p)
     chosen = [targets[i] for i in idx]
 
@@ -101,16 +117,19 @@ def generate_campaign(graph, host_users, dists, cands, cp, rng,
 
     events = []
     for off, t in zip(offsets, chosen):
-        pool = list(host_users.get(t, set()) & compromised) or list(compromised)
+        pool = (list(compromised) if naive
+                else list(host_users.get(t, set()) & compromised) or list(compromised))
         user = pool[rng.integers(len(pool))]
         events.append((int(off), user, foothold, t))
     return events, capped
 
 
 def generate_corpus(graph, host_users, dists, n, alpha, beta,
-                    credential_bonus, min_out_degree, max_creds, seed):
+                    credential_bonus, min_out_degree, max_creds, seed,
+                    naive=False):
     """Generate n valid fan-out campaigns. Foothold pool precomputed once.
-    Returns (campaigns, stats) with discard_rate and cap_rate logged."""
+    Returns (campaigns, stats) with discard_rate and cap_rate logged.
+    `naive` is passed straight through to generate_campaign (baseline #2)."""
     rng = np.random.default_rng(seed)
     cands, cp = foothold_candidates(graph, min_out_degree)
     if not cands:
@@ -122,7 +141,7 @@ def generate_corpus(graph, host_users, dists, n, alpha, beta,
         attempts += 1
         events, capped = generate_campaign(
             graph, host_users, dists, cands, cp, rng,
-            alpha, beta, credential_bonus, max_creds)
+            alpha, beta, credential_bonus, max_creds, naive=naive)
         if events is None:
             discards += 1
             continue

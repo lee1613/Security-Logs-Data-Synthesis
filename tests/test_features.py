@@ -104,6 +104,19 @@ def test_groups_structural_only_is_a_real_ablation():
     assert list(attr.columns) == list(F.ATTRIBUTE_COLS)
 
 
+def test_structural_only_equals_a_column_slice_of_the_full_matrix():
+    """Task 6's ablation slices the structural columns out of the already-built
+    full matrix instead of rebuilding 486k negatives a second time. That is only
+    legitimate because build_features is a pure row-local map with a fixed emit
+    order -- assert it, so the shortcut cannot rot."""
+    df = _rows([_row(1, "U1@D", "A", "B"), _row(2, "U2@D", "B", "C"),
+                _row(3, "U9@D", "Z", "Q")])
+    g, hu = _tiny_graph(), _HOST_USERS
+    pd.testing.assert_frame_equal(
+        F.build_features(df, g, hu, groups=("structural",)),
+        F.build_features(df, g, hu)[list(F.STRUCTURAL_COLS)])
+
+
 def test_unknown_group_raises():
     df = _rows([_row(1, "U1@D", "A", "B")])
     with pytest.raises(ValueError):

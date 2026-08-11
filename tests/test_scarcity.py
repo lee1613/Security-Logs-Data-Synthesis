@@ -125,6 +125,16 @@ def test_stack_labels_stay_aligned_with_rows():
     assert list(X["f"]) == [1, 2, 3, 4, 5, 6]
 
 
+def test_stack_rejects_frames_whose_columns_disagree():
+    """Task 6 slices the negatives down to the structural columns. If a caller
+    forgets to slice the positives too, pd.concat unions the columns and pads
+    with NaN -- a silently mis-shaped training matrix, not an error."""
+    pos = pd.DataFrame({"a": [1.0], "b": [2.0]})
+    neg = pd.DataFrame({"a": [3.0]})
+    with pytest.raises(ValueError):
+        D.stack([pos], neg)
+
+
 # --- the real splits ----------------------------------------------------------
 
 def test_load_splits_keeps_the_holdout_out_of_training():
@@ -154,6 +164,55 @@ def test_load_splits_merges_the_recovered_hard_negatives():
     edges = lambda df: set(zip(df["src_computer"], df["dst_computer"]))
     assert edges(sp["train_neg"]) & edges(sp["train_pos"])
     assert edges(sp["eval_neg"]) & edges(sp["eval_pos"])
+
+
+# --- Task 9: holdout base-rate down-sampler -----------------------------------
+#
+# The sweep moves the TEST-TIME base rate only. All 51 real holdout positives
+# must survive every point -- dropping one would change what is being measured
+# from "how does precision behave as the haystack shrinks" to "how does it behave
+# on a different, smaller set of attacks".
+
+_N_POS, _N_NEG = 51, 60_000
+
+
+def _eval_y():
+    return np.concatenate([np.ones(_N_POS), np.zeros(_N_NEG)])
+
+
+@pytest.mark.parametrize("rate", [0.01, 0.001, None])
+def test_downsample_keeps_every_positive(rate):
+    y = _eval_y()
+    idx = D.downsample_eval(y, rate, seed=42)
+    assert (y[idx] == 1).sum() == _N_POS
+    assert set(np.flatnonzero(y == 1)) <= set(idx)
+
+
+@pytest.mark.parametrize("rate", [0.01, 0.001])
+def test_downsample_hits_the_target_base_rate(rate):
+    y = _eval_y()
+    achieved = y[D.downsample_eval(y, rate, seed=42)].mean()
+    assert abs(achieved - rate) < rate * 0.01      # rounding on 51 positives only
+
+
+def test_downsample_none_returns_everything_untouched():
+    y = _eval_y()
+    idx = D.downsample_eval(y, None, seed=42)
+    assert np.array_equal(idx, np.arange(len(y)))
+
+
+def test_downsample_is_seed_reproducible_and_seed_sensitive():
+    y = _eval_y()
+    assert np.array_equal(D.downsample_eval(y, 0.01, seed=42),
+                          D.downsample_eval(y, 0.01, seed=42))
+    assert not np.array_equal(D.downsample_eval(y, 0.01, seed=42),
+                              D.downsample_eval(y, 0.01, seed=43))
+
+
+def test_downsample_rejects_a_rate_below_the_natural_floor():
+    # 51 positives against only 60k negatives cannot reach 1:1e6
+    with pytest.raises(ValueError):
+        D.downsample_eval(_eval_y(), 1e-6, seed=42)
 
 
 def test_load_splits_returns_auth_cols_in_order():
