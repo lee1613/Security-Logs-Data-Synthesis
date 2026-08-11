@@ -13,6 +13,39 @@ and nothing else. It computes no statistic over `rows_df` (no mean, no
 value_counts, no fitted encoder, no vocabulary inferred from the input), so
 passing holdout rows in the same frame cannot move any other row's values.
 Nothing here can reach a holdout file.
+
+WHY `credential_novelty` WAS SPECIFIED AND THEN REMOVED (Day-4 finding, keep this)
+----------------------------------------------------------------------------------
+The Day-4 plan listed a fifth structural feature, `credential_novelty` -- binary,
+1 if this `src_user` had NOT been seen on this `dst_computer` in benign history.
+It was built, measured, and dropped. Measured values:
+
+    redteam_fit (all 650 rows)      credential_novelty = 0.0000
+    benign_fit  (first 200k rows)   credential_novelty = 0.0000
+    synth_auth  (first 20k rows)    credential_novelty = 0.3664
+
+It is DEFINITIONALLY zero on any real row. `parse.compute_user_host_counts`
+builds `aggregates["user_host"]` by unioning (src_user, src_computer) with
+(src_user, dst_computer) over the FULL auth corpus -- and the real red-team
+events are inside that corpus. So for any row drawn from real data the pair is
+tautologically already observed. It is nonzero only on synthetic rows, where 1
+marks the fallback branch in `walker.generate_campaign` (`pool =
+list(compromised)`, taken when no harvested credential was ever seen on the
+target). That makes it a "this row is synthetic" marker, not an attack signal:
+left in, a detector trained on real+synth in the augmented arm of the scarcity
+curve could learn a rule keyed on a feature that is dead at evaluation time,
+corrupting the headline experiment.
+
+The graph and the user_host map are deliberately NOT decontaminated. In reality
+the log does contain the undetected attack, so the contaminated history is the
+realistic one; scrubbing it would be optimistically unrealistic. `edge_rarity`
+is kept for the same reason -- and it separates hard: mean 19.238 on redteam_fit
+vs 8.198 on benign_fit.
+
+`n_hosts_for_cred` is kept: its synth-vs-real gap (mean 2,319 on synth vs 261 on
+redteam_fit and 231 on benign_fit) is a genuine generator-fidelity gap with
+overlapping distributions, not a definitional artifact. It stays a legitimate
+feature and is reported as a finding.
 """
 import numpy as np
 import pandas as pd
@@ -36,7 +69,7 @@ _LOGON_TYPE_VOCAB = {"Network": "Network", "?": "unknown", "Service": "Service",
 _UNSEEN_EDGE_WEIGHT = 0.5
 
 STRUCTURAL_COLS = ("edge_rarity", "dst_in_degree", "src_out_degree",
-                   "credential_novelty", "n_hosts_for_cred")
+                   "n_hosts_for_cred")
 ATTRIBUTE_COLS = tuple(
     [f"auth_type_{s}" for s in list(_AUTH_TYPE_VOCAB.values()) + ["other"]]
     + [f"logon_type_{s}" for s in list(_LOGON_TYPE_VOCAB.values()) + ["other"]])
@@ -78,10 +111,8 @@ def _structural(rows_df, graph, host_users):
         "edge_rarity": np.log(total_w / weight),
         "dst_in_degree": arr(graph.in_degree(d) if d in graph else 0 for d in dst),
         "src_out_degree": arr(graph.out_degree(s) if s in graph else 0 for s in src),
-        # polarity: 1 == NOVEL, i.e. this credential was NOT seen on this host in
-        # benign history. Rarity-flavoured, same direction as edge_rarity.
-        "credential_novelty": arr(0.0 if u in host_users.get(d, ()) else 1.0
-                                  for u, d in zip(usr, dst)),
+        # NOTE: no credential_novelty here -- see the module docstring for why the
+        # plan specified it and why it was measured and removed.
         "n_hosts_for_cred": arr(cred_hosts.get(u, 0) for u in usr),
     }, index=rows_df.index)
 

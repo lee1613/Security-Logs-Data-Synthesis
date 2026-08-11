@@ -31,9 +31,9 @@ def _row(t, user, src, dst, auth="NTLM", logon="Network"):
 
 def test_known_values_on_tiny_graph():
     df = _rows([
-        _row(1, "U1@D", "A", "B"),   # seen edge w=3, U1 seen on B -> not novel
-        _row(2, "U2@D", "B", "C"),   # seen edge w=6, U2 seen on C -> not novel
-        _row(3, "U1@D", "A", "C"),   # seen edge w=1, U1 NOT seen on C -> novel
+        _row(1, "U1@D", "A", "B"),   # seen edge w=3
+        _row(2, "U2@D", "B", "C"),   # seen edge w=6
+        _row(3, "U1@D", "A", "C"),   # seen edge w=1 (rarest)
     ])
     out = F.build_features(df, _tiny_graph(), _HOST_USERS, groups=("structural",))
 
@@ -41,7 +41,6 @@ def test_known_values_on_tiny_graph():
         [np.log(10 / 3), np.log(10 / 6), np.log(10 / 1)])
     assert out["dst_in_degree"].tolist() == [1, 2, 2]
     assert out["src_out_degree"].tolist() == [2, 1, 2]
-    assert out["credential_novelty"].tolist() == [0, 0, 1]
     assert out["n_hosts_for_cred"].tolist() == [2, 1, 2]
 
 
@@ -60,7 +59,6 @@ def test_unseen_edge_gets_max_rarity():
     # missing nodes degrade to zero degree, not a crash
     assert out.loc[2, "dst_in_degree"] == 0
     assert out.loc[2, "src_out_degree"] == 0
-    assert out.loc[2, "credential_novelty"] == 1   # never seen anywhere -> novel
     assert out.loc[2, "n_hosts_for_cred"] == 0
 
 
@@ -135,6 +133,17 @@ def test_excluded_features_stay_excluded():
     cols = F.build_features(df, _tiny_graph(), _HOST_USERS).columns
     for banned in ("hour", "success", "orientation", "time"):
         assert not any(banned in c.lower() for c in cols)
+
+
+def test_credential_novelty_is_not_emitted():
+    # Regression guard. The Day-4 plan specified credential_novelty; it measured
+    # 0.0000 on every real row (650 redteam_fit, 200k benign_fit) and 0.3664 on
+    # synth, making it a "this row is synthetic" marker. Read the module docstring
+    # of src/features.py before re-adding it.
+    df = _rows([_row(1, "U1@D", "A", "C")])   # U1 never seen on C
+    cols = F.build_features(df, _tiny_graph(), _HOST_USERS).columns
+    assert "credential_novelty" not in cols
+    assert "credential_novelty" not in F.STRUCTURAL_COLS
 
 
 def test_index_aligned_and_numeric():
