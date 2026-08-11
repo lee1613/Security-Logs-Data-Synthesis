@@ -56,7 +56,7 @@ day3:
 
 # Day-4 scarcity, evaluation, and validation knobs
 day4:
-  scarcity_k: [1, 2, 4, 8, 13]      # unique benign campaigns per seed (scarcity curve)
+  scarcity_k: [1, 2, 4, 8, 13]      # k real red-team FIT campaigns drawn per seed, out of 13 (scarcity curve)
   n_seeds: 5                         # random seeds per k-value (reproducibility)
 
   # Holdout base-rate sweep (test-time axis): rebalance holdout benign to hit ratios.
@@ -73,7 +73,7 @@ day4:
     min_samples_split: 10
     min_samples_leaf: 5
 
-  near_dup_threshold: 0.5            # cosine similarity floor for benign dedup
+  near_dup_threshold: 0.5            # Jaccard threshold: synth campaign counted a near-duplicate of a fit campaign above this
   figures_dir: docs/figures/         # scarcity curve, histograms, hourly plots
   results_json: data/derived/day4_results.json
   validation_report: docs/validation_report.md
