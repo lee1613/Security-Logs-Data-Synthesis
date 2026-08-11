@@ -259,3 +259,44 @@ def test_naive_corpus_still_honours_the_v1_edge_constraint():
     campaigns = _naive_corpus(True, host_users)
     assert len(campaigns) == 30
     assert all(g.has_edge(s, t) for c in campaigns for _, _, s, t in c)
+
+
+def test_corpus_is_reproducible_ACROSS_processes():
+    """Regression guard for a real defect: harvest_credentials did list(set-of-str)
+    and indexed that order with the rng. Python randomizes string hashing per
+    process, so a fixed seed gave a DIFFERENT corpus in every run -- different
+    creds harvested, different credential_bonus in target_weights, different
+    campaign sizes. Measured across three runs at seed 42: 14,071 vs 13,953 vs
+    14,804 synthetic events, and the augmented arm swung 0.26-0.47 as a result.
+
+    Must run in SEPARATE interpreters with different PYTHONHASHSEED -- the same
+    process always agrees with itself, so an in-process check cannot catch this.
+    """
+    import os
+    import subprocess
+    import sys
+
+    prog = (
+        "import numpy as np, networkx as nx, src.walker as W;"
+        "g = nx.DiGraph();"
+        "g.add_edges_from([('C1','C%d'%i,{'weight':i+1}) for i in range(2, 12)]);"
+        "[g.nodes[n].update(in_degree=g.in_degree(n), out_degree=g.out_degree(n))"
+        " for n in g.nodes];"
+        "hu = {'C1': {'U%d@D'%i for i in range(40)},"
+        "      **{'C%d'%i: {'U%d@D'%(i%40)} for i in range(2, 12)}};"
+        "d = {'breadth':[3,4], 'creds_per_campaign':[2,3], 'inter_event_dt':[60,90]};"
+        "c,_ = W.generate_corpus(g, hu, d, n=40, alpha=1.0, beta=1.0,"
+        "                        credential_bonus=3.0, min_out_degree=1,"
+        "                        max_creds=8, seed=42);"
+        "print(sum(len(x) for x in c), [e[1] for e in c[0]])"
+    )
+    outs = []
+    for hashseed in ("0", "12345"):
+        env = {**os.environ, "PYTHONHASHSEED": hashseed, "PYTHONPATH": os.getcwd()}
+        r = subprocess.run([sys.executable, "-c", prog], capture_output=True,
+                           text=True, env=env, cwd=os.getcwd())
+        assert r.returncode == 0, r.stderr
+        outs.append(r.stdout.strip())
+
+    assert outs[0] == outs[1], (
+        f"corpus differs across PYTHONHASHSEED:\n  {outs[0]}\n  {outs[1]}")

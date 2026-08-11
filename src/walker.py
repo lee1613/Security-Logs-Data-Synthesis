@@ -55,8 +55,14 @@ def pick_foothold(cands, cp, rng):
 
 
 def harvest_credentials(foothold, host_users, max_creds, rng):
-    """Credentials observed on the foothold, capped. Empty set if none."""
-    creds = list(host_users.get(foothold, set()))
+    """Credentials observed on the foothold, capped. Empty set if none.
+
+    sorted(), not list(): host_users values are sets of strings, and Python
+    randomizes string hashing per process, so list(set) order differs between
+    runs. Indexing that order with the rng made the whole corpus irreproducible
+    ACROSS processes even at a fixed seed -- different creds harvested ->
+    different credential_bonus in target_weights -> different campaign sizes."""
+    creds = sorted(host_users.get(foothold, set()))
     if len(creds) > max_creds:
         idx = rng.choice(len(creds), size=max_creds, replace=False)
         creds = [creds[i] for i in idx]
@@ -98,7 +104,7 @@ def generate_campaign(graph, host_users, dists, cands, cp, rng,
     if not naive:
         # gap #2 fix: reuse-intensity matches the fit split — restrict to m sampled creds
         m = int(rng.choice(dists["creds_per_campaign"]))
-        comp_list = list(compromised)
+        comp_list = sorted(compromised)   # sorted, not list: see harvest_credentials
         if 0 < m < len(comp_list):
             idx = rng.choice(len(comp_list), size=m, replace=False)
             compromised = {comp_list[i] for i in idx}
@@ -117,8 +123,10 @@ def generate_campaign(graph, host_users, dists, cands, cp, rng,
 
     events = []
     for off, t in zip(offsets, chosen):
-        pool = (list(compromised) if naive
-                else list(host_users.get(t, set()) & compromised) or list(compromised))
+        # sorted, not list: see harvest_credentials -- indexing set order with the
+        # rng is what made the corpus irreproducible across processes
+        pool = (sorted(compromised) if naive
+                else sorted(host_users.get(t, set()) & compromised) or sorted(compromised))
         user = pool[rng.integers(len(pool))]
         events.append((int(off), user, foothold, t))
     return events, capped
