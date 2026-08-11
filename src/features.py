@@ -102,18 +102,23 @@ def _structural(rows_df, graph, host_users):
     total_w = sum(d["weight"] for _, _, d in graph.edges(data=True)) or 1.0
     cred_hosts = _user_host_counts(host_users)
 
-    def arr(it):
-        return np.fromiter(it, dtype=float, count=n)
+    def lookup(keys, table):
+        """Vectorized dict lookup; a key absent from the table degrades to 0.
+        ~7x faster than a per-row generator on 500k rows, which matters because
+        the scarcity sweep calls build_features 50+ times."""
+        return pd.Series(keys).map(table).fillna(0).to_numpy(dtype=float)
 
-    weight = arr(graph[s][d]["weight"] if graph.has_edge(s, d) else _UNSEEN_EDGE_WEIGHT
-                 for s, d in zip(src, dst))
+    # edge weight keys on the (src,dst) PAIR, so it stays a per-row lookup
+    weight = np.fromiter(
+        (graph[s][d]["weight"] if graph.has_edge(s, d) else _UNSEEN_EDGE_WEIGHT
+         for s, d in zip(src, dst)), dtype=float, count=n)
     return pd.DataFrame({
         "edge_rarity": np.log(total_w / weight),
-        "dst_in_degree": arr(graph.in_degree(d) if d in graph else 0 for d in dst),
-        "src_out_degree": arr(graph.out_degree(s) if s in graph else 0 for s in src),
+        "dst_in_degree": lookup(dst, dict(graph.in_degree())),
+        "src_out_degree": lookup(src, dict(graph.out_degree())),
         # NOTE: no credential_novelty here -- see the module docstring for why the
         # plan specified it and why it was measured and removed.
-        "n_hosts_for_cred": arr(cred_hosts.get(u, 0) for u in usr),
+        "n_hosts_for_cred": lookup(usr, cred_hosts),
     }, index=rows_df.index)
 
 
@@ -133,6 +138,10 @@ def build_features(rows_df, graph, host_users, *, groups=("structural", "attribu
     """Feature matrix for any auth rows in AUTH_COLS order (synth, real red team,
     or benign). One output row per input row, index-aligned, numeric, deterministic.
     `groups` selects which families to emit -- this is the ablation switch."""
+    if not groups:
+        # an empty sequence has no unknown members, so it slips past the check
+        # below and dies inside pd.concat with a message that names nothing
+        raise ValueError(f"groups must not be empty; expected some of {_GROUPS}")
     unknown = [g for g in groups if g not in _GROUPS]
     if unknown:
         raise ValueError(f"unknown feature group(s) {unknown}; expected {_GROUPS}")

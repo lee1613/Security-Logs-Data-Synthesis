@@ -110,6 +110,13 @@ def test_unknown_group_raises():
         F.build_features(df, _tiny_graph(), _HOST_USERS, groups=("structural", "hour"))
 
 
+def test_empty_group_raises():
+    # an empty tuple has no unknown members, so it must be rejected on its own
+    df = _rows([_row(1, "U1@D", "A", "B")])
+    with pytest.raises(ValueError, match="must not be empty"):
+        F.build_features(df, _tiny_graph(), _HOST_USERS, groups=())
+
+
 def test_attribute_onehot_is_fixed_width_and_buckets_unseen():
     g, hu = _tiny_graph(), _HOST_USERS
     a = F.build_features(_rows([_row(1, "U1@D", "A", "B", "NTLM", "Network")]),
