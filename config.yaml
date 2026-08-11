@@ -53,3 +53,27 @@ day3:
     - {name: "1e2", rate: 0.01}
     - {name: "1e3", rate: 0.001}
     - {name: "1e4", rate: 0.0001}
+
+# Day-4 scarcity, evaluation, and validation knobs
+day4:
+  scarcity_k: [1, 2, 4, 8, 13]      # unique benign campaigns per seed (scarcity curve)
+  n_seeds: 5                         # random seeds per k-value (reproducibility)
+
+  # Holdout base-rate sweep (test-time axis): rebalance holdout benign to hit ratios.
+  # null = natural floor (all 204,228 holdout benign; ~1:4000 ratio).
+  # Always keep all 51 real holdout positives.
+  holdout_base_rates: [0.01, 0.001, null]
+
+  # GBT hyperparameters: shallow (depth ~3), modest n_estimators, regularized
+  gbt:
+    max_depth: 3
+    n_estimators: 100
+    learning_rate: 0.1
+    subsample: 0.8
+    min_samples_split: 10
+    min_samples_leaf: 5
+
+  near_dup_threshold: 0.5            # cosine similarity floor for benign dedup
+  figures_dir: docs/figures/         # scarcity curve, histograms, hourly plots
+  results_json: data/derived/day4_results.json
+  validation_report: docs/validation_report.md
