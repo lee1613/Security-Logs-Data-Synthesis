@@ -72,3 +72,28 @@
 **Evaluation stance (SETTLED at Day-3 gate, 2026-08-09):** the current architecture is **NOT self-sufficient** as justification of "good training data." TSTR alone cannot conclude the synthetic maps reality — it is necessary, not sufficient (shortcut risk from constant attributes; number needs baselines for scale; within-operator transfer ceiling; tiny 51-event holdout → wide CIs). A defensible conclusion needs the full bundle: V1 (correctness) + V2 (distributional fidelity) + V3 TSTR **with 3 baselines** + a shortcut **ablation** (structural-only features) + multi-seed CIs + an explicit bounded-claim limitations section. A better evaluation design is still to be worked out (open discussion). Do not ship any claim stronger than "reproduces THIS operator's detectable structure."
 
 5. **Single-foothold-per-campaign assumption vs. multi-origin reality.** A real campaign is a **time-sessionized** cluster, NOT a foothold group — and **6 of 13 fit campaigns span 2–3 source computers** (camp 7 = 207 events / 88 targets across **3** `src_computer`; camp 8 = 3; camps 1/2/3/10 = 2). Only 7 of 13 are truly single-origin. The generator emits **one foothold per campaign**, so it cannot produce a multi-origin campaign — it renders camp-7-like activity as one machine → 88 targets instead of 3 machines → 88. Dominant foothold (C17693) carries most events so it's a fair approximation, but the model understates origin diversity. → Fix (Day-3/4 if fidelity matters): allow a campaign to draw a small foothold *set* (sample origin-count from the observed `src_computer`-per-campaign distribution) and partition breadth across them. Also clarifies schema: event = account `src_user` (`U#`) **from** `src_computer` (`C#`) **to** `dst_computer` (`C#`); graph edge is machine→machine, credential is the separate `src_user` axis (`dst_user == src_user` 100%).
+
+---
+
+## Day-3 EXECUTED (2026-08-09) — result + caveats for the Day-3 → Day-4 gate
+
+**Status:** Day-3 data product built (`src/writer.py`, `src/benign.py`, `src/mixed.py`, `scripts/run_day3.py`), 8 commits on `main`, 27/27 tests pass. Gap #2 (creds-per-campaign) fixed in `walker.py`. Full pipeline ran end-to-end (benign scan 999.6s).
+
+**Artifacts produced:** `synth_auth.csv` (144,228 malicious events from 10k campaigns) + row-aligned `synth_labels.csv`; `benign_fit.csv` (483,764) / `benign_holdout.csv` (204,228); `mixed_{1e2,1e3,1e4}.csv` + labels.
+
+**Exit criteria (SPEC §3 DAY 3) — all PASS:**
+- output parses with the real auth reader (144,228 rows, headerless AUTH_COLS)
+- categorical domains ⊆ real (NTLM / Network / Success)
+- labels row-aligned (144,228)
+- every emitted `(src,dst)` is a real graph edge — **0 violations**
+- mixed corpora at **distinct** target rates: 1e2=0.01000, 1e3=0.00100, 1e4=0.00010
+
+**Bug found DURING the run and FIXED (not in the plan):** the mixed-corpus base-rate sweep collapsed — all three corpora came out identical at rate 0.298. Root cause: `build_mixed_corpus` down-sampled *benign* to hit `n_benign = n_mal/rate`, but 144k malicious ≫ any feasible benign draw (1:100 needs 14.4M benign, 1:10000 needs 1.44B), so `min(pool, target)` always hit the 483k cap → one identical file. Fix: shrink whichever class is over target, never upsample — hold benign full, down-sample **malicious** to `rate·n_benign` (1e2→4,838, 1e3→484, 1e4→48). Fewer attacks at lower base rate is also the *correct* semantics for rare-attack eval. Exit check now verifies achieved rates instead of hardcoding a pass.
+
+**Caveat A — benign under-delivered (open, decide at gate):** requested `benign_n=1,500,000`; got **483,764 (fit) / 204,228 (holdout)**. Windows are NOT row-poor (fit window ≈20.4 d ≈ ~360M rows), so this is DuckDB `USING SAMPLE reservoir(n ROWS)` under-delivering over the streaming gzip read under `memory_limit='4GB'` + `threads=2` (yield tracked window width, the signature of a memory/morsel-bounded reservoir, not a true fixed-N draw). *Not confirmed by a `COUNT(*)` — inferred from row-count math.* **Downstream effect:** at 1:10000 the corpus holds only 48 malicious events; 204k test negatives → coarse ROC at low FPR, wide CIs, and an achievable-rate floor of ~2e-6. **Remedy if Day-4 needs denser negatives / lower rates:** percentage sample (`USING SAMPLE 1%`) then cap, raise `memory_limit`, or two-pass (count → fraction).
+
+**Caveat B — business-hour fraction 0.55, not ~1.0 (open, decide at gate):** only 55% of synthetic malicious events land in LANL business hours 6–17; real red-team was ~100%. Cause: `sample_start_time` weights the campaign *start* hour by **benign** hourly volume (flat across 24h), and long bootstrapped inter-event offsets scatter later events across the clock. **Why it matters:** if the Day-4 detector uses a time-of-day feature, synth's weaker/wrong hour prior hurts TSTR, and 3am synth attacks look benign-timed → understates detectability. **Remedy if time-of-day is a feature:** weight `sample_start_time` by the **red-team** hourly footprint (tight 6–17), not benign hourly; tighten the offset model. Deferred because relevance depends on the Day-4 feature set.
+
+**Still open from earlier (unchanged):** gap #3 broad foothold pool (KEPT — drives novelty/lift), gaps #1 + #5 (cred→target proxy, multi-origin) DEFERRED to limitations.
+
+**Day-4 knobs to pin at this gate:** scarcity-curve campaign counts (1/2/4/8/13 real fit); detector family; feature set + the structural-only ablation; memorization/novelty metric (Jaccard of synth `(foothold,target)` edge-sets vs the 13 fit campaigns); seed count for CIs; and dispositions on Caveats A + B above.
