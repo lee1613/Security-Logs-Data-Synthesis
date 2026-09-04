@@ -109,3 +109,33 @@ def test_validate_target_attractiveness(con, mini_auth_path, mini_redteam_path):
     assert res["all_indegree_median"] == 1.0
     assert res["separation_ratio"] == 3.0
     assert res["keep_server_proxy"] is True
+
+
+# --- t_hi windowing: the guard on the graph leak -------------------------
+# Without a bound these aggregates count the evaluation window too, so
+# edge_rarity for a holdout row is computed partly from its own future.
+# Measured cost when unbounded: real-only AUC-PR 0.9026 vs 0.4122.
+# MINI_AUTH times are 1, 2, 3, 4, 3601, 7201.
+
+def test_edge_counts_respects_t_hi(con, mini_auth_path):
+    df = P.compute_edge_counts(con, mini_auth_path, t_hi=4)
+    d = _lookup(df, ["src_computer", "dst_computer"], "weight")
+    assert d[("C1", "C2")] == 2       # times 1,2 -- inside
+    assert d[("C2", "C3")] == 1       # time 3 -- inside
+    assert ("C3", "C4") not in d      # time 3601 -- excluded
+    assert ("C4", "C3") not in d      # time 7201 -- excluded
+    assert len(df) == 3               # 5 unbounded
+
+
+def test_user_host_counts_respects_t_hi(con, mini_auth_path):
+    df = P.compute_user_host_counts(con, mini_auth_path, t_hi=4)
+    d = _lookup(df, ["user", "computer"], "cnt")
+    assert d[("U1@D1", "C1")] == 2
+    assert d[("U2@D1", "C3")] == 1    # row3 dst only; row5 (t=3601) excluded
+    assert not any(u == "U4@D1" for u, _ in d)   # only appears at t=7201
+
+
+def test_t_hi_none_is_unbounded(con, mini_auth_path):
+    """Default must not change existing behaviour -- run_day1 relies on it."""
+    assert (len(P.compute_edge_counts(con, mini_auth_path))
+            == len(P.compute_edge_counts(con, mini_auth_path, t_hi=None)) == 5)

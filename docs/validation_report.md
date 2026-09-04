@@ -18,6 +18,11 @@ All numbers are AUC-PR (average precision) measured on the **real holdout**, nev
 data. The holdout is **51 real red-team events / 6 campaigns against 205,612 benign events** — a
 base rate of **0.000248 (1:4,033)**. Chance is 0.000248.
 
+That base rate is a **sampling choice, not a deployment property** — the negatives are a draw from
+the holdout window, which itself holds on the order of 149 million events (§5). Every *absolute*
+number below is conditional on it. Every *comparative* number is not: both arms of every comparison
+sit on the identical holdout.
+
 ---
 
 ## 1. Headline: the scarcity curve
@@ -142,13 +147,30 @@ All 51 positives retained at every point; only benign is down-sampled.
 
 | target | achieved | positives | negatives | AUC-PR |
 |---|---|---:|---:|---|
-| **natural floor** | **1:4,033** | 51 | 205,612 | **0.903 ± 0.022** |
+| **sampled floor** | **1:4,033** | 51 | 205,612 | **0.903 ± 0.022** |
 | 0.001 | 1:999 | 51 | 50,949 | 0.974 ± 0.011 |
 | 0.01 | 1:99 | 51 | 5,049 | 0.999 ± 0.002 |
 
 The 1:99 number is the one that would look best in a paper and is the least honest — it is bought
-by making the haystack 40× thinner. **The natural floor is the only number that describes the
-deployment this data came from.**
+by making the haystack 40× thinner.
+
+**But 1:4,033 is not a natural floor either, and this sweep only moves in the easy direction.** The
+205,612 negatives are a *draw from* the holdout window, not the window. That window spans
+`[1847858, 2557047]` = 709,189 s, 14.2% of the 58-day timeline, and the graph carries 1,051,430,459
+events — so the window holds on the order of **149 million** events. (Estimated by assuming events
+spread evenly over time; not confirmed by a corpus scan.) Against 51 positives that is a true base
+rate near **1:2,900,000** — roughly **725× rarer than anything measured here**.
+
+The extrapolation is not small. **4.36% of holdout benign already ranks above the red team's
+5th-percentile `edge_rarity`** — about 8,900 rows at 205,612 negatives, but on the order of 6.5
+million at full window volume, against 51 positives. AUC-PR at deployment volume would be far below
+0.903. How far is **not estimated here**; the sweep needed to answer it down-samples positives
+instead of negatives, and was not run.
+
+**Every absolute number in this report is conditional on the 1:4,033 sampled base rate.** The
+comparative results are not — both arms of every comparison sit on the identical holdout, so the
+augmentation deficit (§1), the ablation contrasts (§3), and the rarity baseline's 59%-of-ceiling
+ratio (§4) are unaffected by this.
 
 ---
 
@@ -282,7 +304,10 @@ Stated first-class, not as an afterthought.
 - **Negative-class sampling is now non-uniform.** Red-team edges have exhaustive benign coverage
   (§7.1) while all other edges are sampled at ~204k. This is conservative for detection claims —
   it over-represents benign traffic on attack edges — but it is not a uniform sample.
-- **Holdout base-rate floor ~1:4,000.** Real deployments are rarer still.
+- **The 1:4,033 base rate is a sampling choice, not a floor** (§5). The holdout window holds ~149M
+  events against 205,612 sampled negatives, implying a true rate near 1:2.9M — ~725× rarer. Absolute
+  AUC-PR figures are conditional on the sampled rate; comparative results are not. The sweep in the
+  *hard* direction was not run.
 - **Broad foothold pool is deliberate** (open gap #3), not an oversight.
 - **`credential_novelty` was specified by the plan and removed.** It measured 0.0000 on all 650
   `redteam_fit` and 200k `benign_fit` rows but 0.3664 on synthetic, because `aggregates["user_host"]`

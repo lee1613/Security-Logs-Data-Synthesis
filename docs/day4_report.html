@@ -1,0 +1,553 @@
+<title>Day 4 — Synthetic Data Validation Report</title>
+<style>
+  :root {
+    --ground: #f4f6f7;
+    --surface: #ffffff;
+    --sunk: #eceff1;
+    --ink: #131a1e;
+    --ink-2: #435057;
+    --ink-3: #6b7a82;
+    --rule: #d2dade;
+    --real: #0f766e;
+    --synth: #b4451f;
+    --warn: #a16207;
+    --real-fill: rgba(15, 118, 110, .14);
+    --synth-fill: rgba(180, 69, 31, .14);
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0e1519;
+      --surface: #151e23;
+      --sunk: #101a1f;
+      --ink: #e6edf0;
+      --ink-2: #a9b8bf;
+      --ink-3: #7c8d95;
+      --rule: #24333a;
+      --real: #4ecdc0;
+      --synth: #ee8055;
+      --warn: #d9a441;
+      --real-fill: rgba(78, 205, 192, .16);
+      --synth-fill: rgba(238, 128, 85, .16);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0e1519;
+    --surface: #151e23;
+    --sunk: #101a1f;
+    --ink: #e6edf0;
+    --ink-2: #a9b8bf;
+    --ink-3: #7c8d95;
+    --rule: #24333a;
+    --real: #4ecdc0;
+    --synth: #ee8055;
+    --warn: #d9a441;
+    --real-fill: rgba(78, 205, 192, .16);
+    --synth-fill: rgba(238, 128, 85, .16);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    margin: 0;
+    padding: 0 1.25rem 5rem;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 54rem; margin: 0 auto; }
+  .col { max-width: 40rem; }
+
+  header { padding: 3.5rem 0 2rem; border-bottom: 2px solid var(--ink); }
+  .eyebrow {
+    font-family: var(--mono); font-size: .74rem; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-3); margin: 0 0 1rem;
+  }
+  h1 {
+    font-family: var(--mono); font-weight: 600; font-size: clamp(1.7rem, 4.2vw, 2.5rem);
+    line-height: 1.15; letter-spacing: -.02em; text-wrap: balance; margin: 0 0 .9rem;
+  }
+  .standfirst { font-size: 1.08rem; color: var(--ink-2); margin: 0; max-width: 38rem; }
+  .meta {
+    font-family: var(--mono); font-size: .78rem; color: var(--ink-3);
+    margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: .4rem 1.4rem;
+  }
+
+  h2 {
+    font-family: var(--mono); font-size: 1.02rem; font-weight: 600;
+    letter-spacing: .01em; margin: 3.5rem 0 .3rem;
+    padding-top: 1.1rem; border-top: 1px solid var(--rule);
+  }
+  h2 .num { color: var(--ink-3); margin-right: .7rem; font-weight: 400; }
+  .sub { font-family: var(--mono); font-size: .78rem; color: var(--ink-3); margin: 0 0 1.4rem; }
+  h3 { font-family: var(--mono); font-size: .9rem; font-weight: 600; margin: 2rem 0 .5rem; }
+  p { margin: 0 0 1rem; }
+  strong { font-weight: 650; }
+  code {
+    font-family: var(--mono); font-size: .875em;
+    background: var(--sunk); padding: .1em .35em; border-radius: 3px;
+  }
+  a { color: var(--real); text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--real); outline-offset: 3px; }
+
+  .readout {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+    gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+    margin: 2.5rem 0 1rem;
+  }
+  .cell { background: var(--surface); padding: 1rem 1.1rem; }
+  .cell .k {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-3); display: block; margin-bottom: .45rem;
+  }
+  .cell .v {
+    font-family: var(--mono); font-size: 1.55rem; font-weight: 600;
+    font-variant-numeric: tabular-nums; line-height: 1; display: block;
+  }
+  .cell .n { font-size: .78rem; color: var(--ink-3); display: block; margin-top: .4rem; }
+  .v.real { color: var(--real); }
+  .v.synth { color: var(--synth); }
+
+  figure { margin: 2rem 0; }
+  .chart { background: var(--surface); border: 1px solid var(--rule); padding: 1rem .5rem .5rem; }
+  svg { display: block; width: 100%; height: auto; }
+  figcaption { font-family: var(--mono); font-size: .75rem; color: var(--ink-3); margin-top: .7rem; }
+
+  .scroll { overflow-x: auto; margin: 1.5rem 0; border: 1px solid var(--rule); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .875rem; min-width: 30rem; }
+  th, td { padding: .6rem .85rem; text-align: left; border-bottom: 1px solid var(--rule); }
+  thead th {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-3); font-weight: 500;
+    background: var(--sunk); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.hl td { background: var(--sunk); font-weight: 600; }
+  .neg { color: var(--synth); font-weight: 600; }
+  .pos { color: var(--real); font-weight: 600; }
+
+  .pill {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .06em;
+    text-transform: uppercase; padding: .16em .5em; border-radius: 2px; white-space: nowrap;
+  }
+  .pill.pass { background: var(--real-fill); color: var(--real); }
+  .pill.miss { background: var(--synth-fill); color: var(--synth); }
+  .pill.na   { background: var(--sunk); color: var(--ink-3); }
+
+  blockquote {
+    margin: 1.75rem 0; padding: 1.1rem 1.3rem;
+    background: var(--surface); border-left: 3px solid var(--warn);
+  }
+  blockquote p:last-child { margin-bottom: 0; }
+
+  .callout {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--synth); padding: 1.1rem 1.3rem; margin: 1.75rem 0;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .lbl {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--synth); display: block; margin-bottom: .5rem;
+  }
+
+  ul { padding-left: 1.15rem; margin: 0 0 1rem; }
+  li { margin-bottom: .6rem; }
+  li::marker { color: var(--ink-3); }
+
+  .verdict {
+    border: 2px solid var(--ink); background: var(--surface);
+    padding: 1.6rem 1.5rem; margin: 2rem 0;
+  }
+  .verdict h2 { border: none; margin: 0 0 .8rem; padding: 0; font-size: 1.15rem; }
+
+  footer {
+    margin-top: 4rem; padding-top: 1.2rem; border-top: 1px solid var(--rule);
+    font-family: var(--mono); font-size: .76rem; color: var(--ink-3);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .trace { animation: draw 1.1s ease-out both; }
+    @keyframes draw { from { stroke-dashoffset: 620; } to { stroke-dashoffset: 0; } }
+  }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Validation Report · Day 4</p>
+  <h1>Does synthetic attack data substitute for scarce real attack data?</h1>
+  <p class="standfirst">No. It is measurably worse than using nothing at all — and the two cleanest
+  numbers in the study are the ones that took no machine learning to produce.</p>
+  <div class="meta">
+    <span>branch day4-augmentation-eval</span><span>98 tests</span>
+    <span>eval: 51 pos / 205,612 neg</span><span>sampled base rate 1:4,033</span>
+  </div>
+</header>
+
+<div class="col">
+<h2><span class="num">00</span>What this measures</h2>
+<p class="sub">and what it deliberately does not</p>
+<p>The detector here is a <strong>measuring instrument for synthetic-data quality</strong>, not a
+detection-science contribution. Nothing claims a new way to find lateral movement. Every number
+exists to answer one question: <em>is this synthetic data useful?</em></p>
+<p>All figures are AUC-PR on the <strong>real holdout</strong>, never on synthetic data. Chance is
+0.000248.</p>
+</div>
+
+<div class="readout">
+  <div class="cell"><span class="k">Real only, k=13</span><span class="v real">0.903</span><span class="n">the ceiling</span></div>
+  <div class="cell"><span class="k">Real + synthetic</span><span class="v synth">0.337</span><span class="n">15 independent draws</span></div>
+  <div class="cell"><span class="k">Rarity, no training</span><span class="v">0.530</span><span class="n">59% of the ceiling</span></div>
+  <div class="cell"><span class="k">Synth only (TSTR)</span><span class="v synth">0.060</span><span class="n">near-useless</span></div>
+</div>
+
+<div class="col">
+<h2><span class="num">01</span>Headline — the scarcity curve</h2>
+<p class="sub">25 cells · 5 k-values × 5 seeds · synth regenerated per point</p>
+<p>Each cell draws <em>k</em> of the 13 real fit campaigns, <strong>refits the generator on only
+those k</strong>, regenerates a fresh corpus, and trains two detectors — scoring both once on the
+untouched holdout.</p>
+</div>
+
+<figure>
+  <div class="chart">
+    <svg viewBox="0 0 600 340" role="img" aria-label="Scarcity curve: the real-only arm rises from 0.43 to 0.90 as campaigns increase, while the augmented arm stays between 0.04 and 0.38. The two never overlap.">
+      <g stroke="var(--rule)" stroke-width="1">
+        <line x1="60" y1="30" x2="560" y2="30"/><line x1="60" y1="97.5" x2="560" y2="97.5"/>
+        <line x1="60" y1="165" x2="560" y2="165"/><line x1="60" y1="232.5" x2="560" y2="232.5"/>
+        <line x1="60" y1="300" x2="560" y2="300"/>
+      </g>
+      <g fill="var(--ink-3)" font-family="ui-monospace, monospace" font-size="11" text-anchor="end">
+        <text x="50" y="34">1.0</text><text x="50" y="101">0.75</text>
+        <text x="50" y="169">0.5</text><text x="50" y="236">0.25</text><text x="50" y="304">0</text>
+      </g>
+      <g fill="var(--ink-3)" font-family="ui-monospace, monospace" font-size="11" text-anchor="middle">
+        <text x="60" y="322">1</text><text x="195" y="322">2</text><text x="330" y="322">4</text>
+        <text x="465" y="322">8</text><text x="560" y="322">13</text>
+      </g>
+      <polygon fill="var(--real-fill)"
+        points="60,131.3 195,97.5 330,60.5 465,58.4 560,50.3 560,62.1 465,96.2 330,98.9 195,183.9 60,236.6"/>
+      <polygon fill="var(--synth-fill)"
+        points="60,276.8 195,223.9 330,216.6 465,217.7 560,176.9 560,216.3 465,263 330,269 195,294.1 60,300"/>
+      <polyline class="trace" fill="none" stroke="var(--real)" stroke-width="2.5"
+        stroke-linejoin="round" stroke-dasharray="620"
+        points="60,183.9 195,140.7 330,79.7 465,77.3 560,56.2"/>
+      <polyline class="trace" fill="none" stroke="var(--synth)" stroke-width="2.5"
+        stroke-linejoin="round" stroke-dasharray="620"
+        points="60,290.3 195,259 330,242.8 465,240.3 560,196.6"/>
+      <g fill="var(--real)">
+        <circle cx="60" cy="183.9" r="3.5"/><circle cx="195" cy="140.7" r="3.5"/>
+        <circle cx="330" cy="79.7" r="3.5"/><circle cx="465" cy="77.3" r="3.5"/>
+        <circle cx="560" cy="56.2" r="4.5"/>
+      </g>
+      <g fill="var(--synth)">
+        <circle cx="60" cy="290.3" r="3.5"/><circle cx="195" cy="259" r="3.5"/>
+        <circle cx="330" cy="242.8" r="3.5"/><circle cx="465" cy="240.3" r="3.5"/>
+        <circle cx="560" cy="196.6" r="4.5"/>
+      </g>
+      <text x="300" y="338" fill="var(--ink-3)" font-family="ui-monospace, monospace"
+        font-size="11" text-anchor="middle">k = real red-team campaigns available for training</text>
+      <text x="548" y="46" fill="var(--real)" font-family="ui-monospace, monospace"
+        font-size="11" text-anchor="end" font-weight="600">real only</text>
+      <text x="548" y="188" fill="var(--synth)" font-family="ui-monospace, monospace"
+        font-size="11" text-anchor="end" font-weight="600">real + synthetic</text>
+    </svg>
+  </div>
+  <figcaption>AUC-PR on holdout, mean of 5 seeds, 95% CI bands (normal approx., n=5).</figcaption>
+</figure>
+
+<div class="scroll">
+<table>
+  <thead><tr><th class="num">k</th><th class="num">real only</th><th class="num">real + synthetic</th><th class="num">lift</th></tr></thead>
+  <tbody>
+    <tr><td class="num">1</td><td class="num">0.430 ± 0.195</td><td class="num">0.036 ± 0.050</td><td class="num neg">−0.394</td></tr>
+    <tr><td class="num">2</td><td class="num">0.590 ± 0.160</td><td class="num">0.152 ± 0.130</td><td class="num neg">−0.439</td></tr>
+    <tr><td class="num">4</td><td class="num">0.816 ± 0.071</td><td class="num">0.212 ± 0.097</td><td class="num neg">−0.604</td></tr>
+    <tr><td class="num">8</td><td class="num">0.825 ± 0.070</td><td class="num">0.221 ± 0.084</td><td class="num neg">−0.604</td></tr>
+    <tr class="hl"><td class="num">13</td><td class="num">0.903 ± 0.022</td><td class="num">0.383 ± 0.073</td><td class="num neg">−0.519</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="col">
+<p><strong>Synthetic augmentation does not fail to help. It destroys the detector, at every k.</strong>
+The real-only arm behaves exactly as a scarcity curve should. The augmented arm never comes close,
+and the damage does not shrink as real data accumulates.</p>
+<p>Across <strong>15 independent synthetic draws</strong> at k=13, the augmented arm ranges
+0.240–0.469 against a real-only range of 0.878–0.942. The distributions do not overlap at any point.</p>
+
+<h2><span class="num">02</span>Novelty — is it just replaying the training data?</h2>
+<p class="sub">10,000 synthetic campaigns vs the 13 fit campaigns</p>
+</div>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>metric</th><th class="num">value</th></tr></thead>
+  <tbody>
+    <tr><td>max-Jaccard vs fit campaigns — median, p95, p99</td><td class="num">0.0</td></tr>
+    <tr><td>campaigns with max-Jaccard exactly 0</td><td class="num">9,988 / 10,000</td></tr>
+    <tr><td>near-duplicate rate (≥ 0.5)</td><td class="num">0.0002 (2)</td></tr>
+    <tr class="hl"><td>edge novelty rate</td><td class="num pos">0.9983</td></tr>
+    <tr><td>distinct synth edges / fit edges / overlap</td><td class="num">100,256 / 299 / 166</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="col">
+<p>The generator is <strong>not</strong> replaying its training campaigns — it explores
+overwhelmingly new territory inside the real graph. Both "near-duplicates" are breadth-1 campaigns
+coinciding with singleton fit campaigns; coincidence at the smallest possible size.</p>
+<p>Per the plan's decision rule this is the third case: <strong>no lift + high novelty ⇒ honest
+negative.</strong> The synthetic data explores real edges that are not the discriminative ones.
+Novelty was never the problem. Fidelity is.</p>
+
+<h2><span class="num">03</span>Ablation — real structure, or the NTLM shortcut?</h2>
+<p class="sub">attribute one-hots dropped</p>
+</div>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>arm</th><th class="num">with attributes</th><th class="num">structural only</th></tr></thead>
+  <tbody>
+    <tr><td>real only</td><td class="num">0.903 ± 0.022</td><td class="num pos">0.853 ± 0.024</td></tr>
+    <tr><td>real + synthetic</td><td class="num">0.290 ± 0.031</td><td class="num">0.347 ± 0.026</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="col">
+<p><strong>Detection survives.</strong> Dropping the attribute features costs the real detector only
+0.05 — the real signal is graph structure, not the tooling artifact. The augmented arm gets
+<em>better</em> without them: it was leaning on a crutch the real model never needed.</p>
+</div>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>model</th><th>top feature</th><th class="num">mass</th><th class="num">structural / attribute</th></tr></thead>
+  <tbody>
+    <tr><td>real only</td><td><code>edge_rarity</code></td><td class="num pos">0.977</td><td class="num">0.985 / 0.015</td></tr>
+    <tr><td>real + synthetic</td><td><code>auth_type_NTLM</code></td><td class="num neg">0.944</td><td class="num">0.055 / 0.945</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="col">
+<h3>Diagnosis: generative</h3>
+<ul>
+  <li><strong>Not structural</strong> — real-only holds 0.853 on graph structure alone.</li>
+  <li><strong>Not attributional</strong> — dropping attributes costs real-only 0.05 and <em>helps</em> the augmented arm.</li>
+  <li><strong>Generative</strong> — at k=13 the augmented positive class is <strong>95.6% synthetic</strong>
+  (~14,286 synth events against 650 real). <code>auth_type</code> is 100% NTLM on synthetic <em>and</em>
+  real red-team traffic but only 5% of benign. Drowned in synthetic positives, the class-balanced model
+  abandons <code>edge_rarity</code> for that one coarse indicator — a rule with catastrophic precision
+  at 1:4,000.</li>
+</ul>
+
+<h2><span class="num">04</span>Baselines and TSTR</h2>
+<p class="sub">all at k=13, all on the real holdout</p>
+</div>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>arm</th><th class="num">AUC-PR</th></tr></thead>
+  <tbody>
+    <tr class="hl"><td>#1 real-fit ceiling</td><td class="num pos">0.903 ± 0.022</td></tr>
+    <tr class="hl"><td>#3 rarity heuristic — <em>no training at all</em></td><td class="num">0.530</td></tr>
+    <tr><td>real + tuned synthetic</td><td class="num">0.339 ± 0.039</td></tr>
+    <tr><td>#2 real + naive synthetic</td><td class="num">0.343 ± 0.061</td></tr>
+    <tr><td>TSTR — tuned synthetic only</td><td class="num neg">0.060 ± 0.069</td></tr>
+    <tr><td>#2 TSTR — naive synthetic only</td><td class="num neg">0.118 ± 0.096</td></tr>
+    <tr><td>chance</td><td class="num">0.000248</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="col">
+<p><strong>A training-free ranking by edge rarity reaches 0.530 — 59% of the trained detector, and
+~2,100× chance.</strong> Most of what the model "learns" is available without learning anything.
+Any claim that this task needs machine learning has to clear that bar first.</p>
+
+<div class="callout">
+  <span class="lbl">Hypothesis refuted</span>
+  <p>We expected the <code>β=1</code> in-degree weighting — which drives the generator onto mega-hub
+  servers — to be the culprit. It is not. The naive generator (β=0, no hub attraction, no credential
+  restriction, random users) is statistically indistinguishable from the tuned one in both the
+  augmented arm (0.343 vs 0.339) and TSTR. <strong>Removing the sophistication changes nothing.</strong></p>
+</div>
+
+<h2><span class="num">05</span>Base rate is a choice, and it flatters</h2>
+<p class="sub">test-time sweep · all 51 positives retained at every point</p>
+</div>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>target</th><th class="num">achieved</th><th class="num">negatives</th><th class="num">AUC-PR</th></tr></thead>
+  <tbody>
+    <tr class="hl"><td>sampled floor</td><td class="num">1:4,033</td><td class="num">205,612</td><td class="num">0.903 ± 0.022</td></tr>
+    <tr><td>0.001</td><td class="num">1:999</td><td class="num">50,949</td><td class="num">0.974 ± 0.011</td></tr>
+    <tr><td>0.01</td><td class="num">1:99</td><td class="num">5,049</td><td class="num">0.999 ± 0.002</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="col">
+<p>The 1:99 number is the one that would look best in a paper and is the least honest — it is bought
+by making the haystack 40× thinner.</p>
+
+<p><strong>But 1:4,033 is not a natural floor either, and this sweep only moves in the easy
+direction.</strong> The 205,612 negatives are a <em>draw from</em> the holdout window, not the
+window. That window spans 709,189 s — 14.2% of the 58-day timeline — and the graph carries
+1,051,430,459 events, so the window holds on the order of <strong>149 million</strong> events.
+(Estimated by assuming events spread evenly over time; not confirmed by a corpus scan.) Against 51
+positives that is a true base rate near <strong>1:2,900,000</strong> — roughly <strong>725× rarer
+than anything measured here.</strong></p>
+
+<p>The extrapolation is not small. <strong>4.36% of holdout benign already ranks above the red
+team's 5th-percentile edge_rarity</strong> — about 8,900 rows at 205,612 negatives, but on the order
+of 6.5 million at full window volume, against 51 positives. AUC-PR at deployment volume would be far
+below 0.903. How far is <strong>not estimated here</strong>: the sweep that answers it down-samples
+positives rather than negatives, and was not run.</p>
+
+<p><strong>Every absolute number on this page is conditional on the 1:4,033 sampled base rate.</strong>
+The comparative results are not — both arms of every comparison sit on the identical holdout, so the
+augmentation deficit, the ablation contrasts, and the rarity baseline's 59%-of-ceiling ratio are
+unaffected.</p>
+
+<h2><span class="num">06</span>Fidelity — V1 and V2</h2>
+<p class="sub">144,228 rows / 10,000 campaigns</p>
+</div>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>V1 check</th><th>result</th></tr></thead>
+  <tbody>
+    <tr><td>timestamps strictly increasing, all Δt &gt; 0</td><td><span class="pill pass">pass</span> 0 violations</td></tr>
+    <tr><td>no campaign beyond the 58-day window</td><td><span class="pill pass">pass</span> 0 violations</td></tr>
+    <tr><td>every (src,dst) is a real graph edge</td><td><span class="pill pass">pass</span> 0 violations</td></tr>
+    <tr><td>no credential used before acquisition</td><td><span class="pill na">n/a by architecture</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="col">
+<p>The fourth item is <strong>not</strong> a passing assertion and is not counted as one. The fan-out
+generator has no hops — every credential is harvested at the foothold at t=0, so use-before-acquisition
+cannot occur by construction. Reporting it as "passed" would be dishonest.</p>
+</div>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>V2 field</th><th class="num">KS D</th><th class="num">p</th><th class="num">median s/r</th><th class="num">mean s/r</th></tr></thead>
+  <tbody>
+    <tr><td>breadth</td><td class="num">0.188</td><td class="num">0.684</td><td class="num">9 / 9</td><td class="num">14.4 / 27.9</td></tr>
+    <tr><td>inter-event Δt</td><td class="num">0.004</td><td class="num">1.000</td><td class="num">87 / 90</td><td class="num">340 / 344</td></tr>
+    <tr><td>creds per campaign</td><td class="num">0.358</td><td class="num">0.054</td><td class="num">2 / 4</td><td class="num">2.98 / 11.38</td></tr>
+    <tr class="hl"><td>dst in-degree <span class="pill miss">JS 0.350 · target &lt;0.1</span></td><td class="num">—</td><td class="num">—</td><td class="num">11,659 / 20</td><td class="num">8,474 / 1,129</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="col">
+<p><strong>The p-values are the least informative thing in this table.</strong> With 13 real campaigns
+against 10,000 synthetic, KS has almost no power; a non-rejection is not a fit. The effect sizes:</p>
+<ul>
+  <li><strong>dst in-degree</strong> is the largest gap and the only outright miss. The generator hits
+  mega-hub servers (median in-degree 11,659); the real red team hit obscure hosts (median 20).</li>
+  <li><strong>creds per campaign</strong> p=0.054 is a non-rejection, not a fix — mean 2.98 vs 11.38.
+  The earlier fix landed directionally but under-delivers ~4×.</li>
+  <li><strong>breadth</strong> agrees in the body, not the tail: medians match exactly, but p95 is
+  39 synth vs 120 real.</li>
+  <li><strong>inter-event Δt</strong> is near-tautological — the generator bootstraps Δt by resampling
+  the fit values. It confirms no placement bug; it is not independent evidence.</li>
+  <li><strong>JS ≈ 0 on the constant categoricals proves nothing</strong> and is deliberately not
+  computed. Both sides are constant by measurement.</li>
+</ul>
+
+<h2><span class="num">07</span>Two defects found during evaluation</h2>
+<p class="sub">both produce better-looking numbers — which is why they were worth chasing</p>
+
+<h3>7.1 — The benign sampler made the classes edge-disjoint</h3>
+<p>The Day-3 sampler dropped every benign row whose edge was a red-team edge. The 51 holdout positives
+and 204,228 negatives therefore shared <strong>exactly zero edges</strong>. The feature-space region
+occupied by the attack was guaranteed empty of negatives in <em>both</em> splits, so the detector learned
+"that region is positive" on fit and was still right on holdout — not by generalizing, but because one
+global filter carved the same hole twice.</p>
+<p><strong>Cost of the artifact: 0.999 → 0.894.</strong> What exposed it was the rarity baseline: a
+0.999 trained score sitting above a 0.550 single-feature score is not credible. Repaired by recovering
+the 3,662 benign events on those 302 edges. Holdout edge overlap went 0/39 → 7/39.</p>
+
+<h3>7.2 — Synthetic generation was not reproducible across processes</h3>
+<p>Credential harvesting did <code>list(set-of-strings)</code> and indexed that order with the RNG.
+Python randomizes string hashing per process, so a fixed seed produced a different corpus every run.
+Caught by reconciling three runs that should have been identical: the real-only arm matched
+bit-for-bit, while synthetic event counts came out 14,071 vs 13,953 vs 14,804.</p>
+<p>Fixed with <code>sorted()</code>, guarded by a test that runs the generator in two subprocesses
+under different <code>PYTHONHASHSEED</code> values — an in-process check cannot catch this. All numbers
+above predate the fix, so they are <em>independent draws</em>. That strengthens the headline rather
+than weakening it: all 15 independent k=13 draws show large harm.</p>
+
+<h2><span class="num">08</span>The insight worth carrying</h2>
+</div>
+
+<blockquote>
+  <p>The synthetic data faithfully reproduces the actor's business-hours tradecraft, but timing is
+  <strong>deliberately excluded</strong> from the detector — <strong>a naive "flag out-of-hours
+  activity" rule would miss this red team entirely.</strong></p>
+</blockquote>
+
+<div class="col">
+<p><strong>Behavioral fidelity and detection utility are separate axes.</strong> A feature can be
+behaviorally real and detection-useless. Hour-of-day is exactly that: benign traffic peaks in the same
+hours, and there are zero off-hours attack examples to learn from.</p>
+<p><em>Correction to a carried-forward premise:</em> the note said the real red team is ~100%
+business-hours. Measured, it is <strong>0.748</strong> — 164 of 650 events fall in hours 18–23. Synthetic
+is 0.549 against a corpus rate of 0.570, so the generator reproduces the <em>corpus</em> hourly profile
+by construction and under-represents the red team's skew. The drift is real; its magnitude is 0.55 vs
+0.75, not 0.55 vs ~1.0.</p>
+
+<h2><span class="num">09</span>Limitations</h2>
+<p class="sub">first-class, not an afterthought</p>
+<ul>
+  <li><strong>51 holdout positives.</strong> The binding statistical constraint, and it cannot grow.
+  Every interval here is wide.</li>
+  <li><strong>Per-event altitude has a known ceiling</strong> — classifying single rows discards the
+  campaign structure where lateral movement actually lives.</li>
+  <li><strong>Within-operator transfer only.</strong> Same team, same toolkit, one engagement. A
+  different attacker is not demonstrated.</li>
+  <li><strong>Credential→target assignment is a benign co-occurrence proxy</strong>, not observed
+  attacker credential use.</li>
+  <li><strong>Benign label noise.</strong> The red-team ground truth is detection-incomplete;
+  "benign" may hide undetected attacks. <code>edge_rarity</code> is computed against a baseline that
+  still contains the attack — realistic, but contaminated.</li>
+  <li><strong>Negative sampling is now non-uniform</strong> — attack edges have exhaustive benign
+  coverage while others are sampled. Conservative for detection claims, but not uniform.</li>
+  <li><strong><code>credential_novelty</code> was specified and removed</strong> — it measured 0.0000
+  on every real row and 0.3664 on synthetic, making it a "this row is synthetic" marker rather than a
+  detection feature.</li>
+  <li><strong>Numbers predate the determinism fix</strong> (§7.2).</li>
+</ul>
+</div>
+
+<div class="verdict">
+  <h2>Verdict</h2>
+  <p><strong>Do not use this synthetic corpus to augment scarce real attack data.</strong> It is worse
+  than nothing: it costs 0.39–0.60 AUC-PR at every scarcity level tested, and training on it alone is
+  near-useless.</p>
+  <p>The failure is <strong>generative</strong>, and it is not the hub-weighting layer — turning that
+  off changes nothing. The corpus is structurally novel, with no memorization, but its per-event feature
+  distribution does not match the real attack, and at a 20:1 ratio it dominates the positive class and
+  pulls the detector onto a coarse tooling attribute.</p>
+  <p>The honest framing for anything built on this: <strong>the generator reproduces this operator's
+  campaign shape, not its detectable structure.</strong></p>
+  <p>The most useful number in the study required no machine learning at all — a rarity heuristic at
+  0.530, 59% of the trained ceiling. Before adding synthesis, that is the bar.</p>
+</div>
+
+<footer>
+  A negative result with clean methodology is a legitimate outcome. Nothing was tuned: no
+  hyperparameter search, no threshold picking, no re-running until the curve looked better. Where a
+  check failed, it is reported as failed.
+</footer>
+</div>

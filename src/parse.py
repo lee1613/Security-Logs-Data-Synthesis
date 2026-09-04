@@ -44,25 +44,39 @@ def _redteam_rel(rt_path):
             "'dst_computer':'VARCHAR'})")
 
 
-def compute_edge_counts(con, auth_path):
+def _window(t_hi):
+    """WHERE clause bounding a scan to the fit window, or nothing at all.
+
+    t_hi exists because these aggregates feed `features.build_features`, which
+    scores the HOLDOUT rows. Counting the whole 58-day file means an edge's
+    weight -- and therefore its edge_rarity -- includes traffic from the
+    evaluation window, i.e. the future relative to training. Measured cost of
+    that leak: real-only AUC-PR 0.9026 -> 0.4122 once the graph is rebuilt with
+    t_hi = day3.fit_window[1]. Pass t_hi for anything the detector consumes.
+    """
+    return "" if t_hi is None else f"WHERE time <= {int(t_hi)} "
+
+
+def compute_edge_counts(con, auth_path, t_hi=None):
     return con.execute(
         f"SELECT src_computer, dst_computer, COUNT(*) AS weight "
-        f"FROM {_auth_rel(auth_path)} GROUP BY src_computer, dst_computer"
+        f"FROM {_auth_rel(auth_path)} {_window(t_hi)}"
+        f"GROUP BY src_computer, dst_computer"
     ).df()
 
 
-def compute_user_host_counts(con, auth_path):
+def compute_user_host_counts(con, auth_path, t_hi=None):
     # A credential is "seen on" a host if it appears as its source OR destination.
     # Aggregate each orientation to its (small) distinct result FIRST, then union —
     # this avoids exploding the ~1B-row scan to ~2B rows (which overflows temp disk).
-    rel = _auth_rel(auth_path)
+    rel, w = _auth_rel(auth_path), _window(t_hi)
     return con.execute(
         f"SELECT user, computer, SUM(cnt) AS cnt FROM ("
         f"  SELECT src_user AS user, src_computer AS computer, COUNT(*) AS cnt "
-        f"  FROM {rel} GROUP BY 1, 2 "
+        f"  FROM {rel} {w}GROUP BY 1, 2 "
         f"  UNION ALL "
         f"  SELECT src_user AS user, dst_computer AS computer, COUNT(*) AS cnt "
-        f"  FROM {rel} GROUP BY 1, 2) GROUP BY user, computer"
+        f"  FROM {rel} {w}GROUP BY 1, 2) GROUP BY user, computer"
     ).df()
 
 
