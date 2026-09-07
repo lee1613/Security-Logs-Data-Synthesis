@@ -59,6 +59,7 @@ from src.config import load_config
 import src.detect as Dt
 import src.features as F
 import src.parse as P
+import src.validate as V
 import src.walker as W
 import src.writer as Wr
 
@@ -152,7 +153,7 @@ def build_context(cfg):
             "train_neg_X": train_neg_X, "eval_X": eval_X, "eval_y": eval_y}
 
 
-def generate_synth_rows(ctx, dists, seed, naive=False):
+def generate_synth_rows(ctx, dists, seed, naive=False, n=None):
     """Fresh corpus from the k-campaign refit, placed on the timeline and emitted
     as auth rows -- the same generate -> place -> emit sequence as run_day3.
 
@@ -164,7 +165,7 @@ def generate_synth_rows(ctx, dists, seed, naive=False):
     isolates exactly the weighting + credential layers.
     """
     cfg, fo = ctx["cfg"], ctx["cfg"]["fanout"]
-    n = cfg["day4"]["synth_campaigns_per_point"]
+    n = n or cfg["day4"]["synth_campaigns_per_point"]
     weighting = (dict(alpha=0.0, beta=0.0, credential_bonus=1.0) if naive else
                  dict(alpha=cfg["alpha"], beta=cfg["beta"],
                       credential_bonus=fo["credential_bonus"]))
@@ -181,10 +182,15 @@ def generate_synth_rows(ctx, dists, seed, naive=False):
         start = Wr.sample_start_time(
             ctx["hourly"], rng, max_offset=camp[-1][0],
             collection_seconds=cfg["day3"]["collection_seconds"])
-        r, _ = Wr.campaign_to_rows(Wr.place_campaign(camp, start), cid, rid)
+        r, lab = Wr.campaign_to_rows(Wr.place_campaign(camp, start), cid, rid)
+        for row, l in zip(r, lab):
+            row["campaign_id"] = l["campaign_id"]
         rows.extend(r)
         rid += len(r)
-    return pd.DataFrame(rows)[AUTH], stats
+    # campaign_id rides along for the validation task (novelty and V1/V2 are all
+    # per-campaign). build_features reads columns by name, so the extra column is
+    # inert for every other caller.
+    return pd.DataFrame(rows)[AUTH + ["campaign_id"]], stats
 
 
 def scarcity_point(k, seed, ctx):
@@ -719,8 +725,72 @@ def run_baserate(ctx, figures, out_json):
     print(f"\nfigure -> {fig}\nresults -> {out_json}")
 
 
+def run_validate(ctx, figures, out_json):
+    """Novelty + SPEC V1 + V2 fidelity on a fresh full-size corpus.
+
+    src/validate.py had no caller: the novelty and V1/V2 numbers in the report
+    were produced by an ad-hoc script that was never committed, so nothing in the
+    repo reproduced them. This task is that missing caller. It regenerates the
+    corpus in-process from the frozen fit split rather than reading Day-3's CSVs,
+    so the statistics always describe the generator as currently configured --
+    the stale CSVs were built against the pre-t_hi full-corpus graph.
+    """
+    cfg = ctx["cfg"]
+    n = cfg["fanout"]["n_campaigns"]
+    fit = ctx["train_pos"]
+    dists = W.fit_fanout_distributions(fit)
+    synth, _ = generate_synth_rows(ctx, dists, seed=cfg["seed"], n=n)
+    print(f"corpus: {len(synth):,} rows / {synth['campaign_id'].nunique():,} campaigns")
+
+    nov = V.novelty_metrics(V.campaign_edge_sets(synth), V.campaign_edge_sets(fit),
+                            near_dup_threshold=cfg["day4"]["near_dup_threshold"])
+    v1 = V.v1_assertions(synth, ctx["graph"],
+                         collection_seconds=cfg["day3"]["collection_seconds"])
+    v2 = V.v2_metrics(synth, fit, ctx["graph"])
+
+    mx = nov["max_jaccard"]
+    overlap = nov["n_synth_edges"] - round(nov["edge_novelty_rate"] * nov["n_synth_edges"])
+    print()
+    print("NOVELTY")
+    print(f"  max-Jaccard median={np.median(mx):.4f} "
+          f"p95={np.percentile(mx, 95):.4f} p99={np.percentile(mx, 99):.4f}")
+    print(f"  exactly 0: {int((mx == 0).sum()):,} / {len(mx):,}")
+    print(f"  pct_near_duplicate={nov['pct_near_duplicate']:.4f}  "
+          f"edge_novelty_rate={nov['edge_novelty_rate']:.4f}")
+    print(f"  distinct edges synth={nov['n_synth_edges']:,} "
+          f"fit={nov['n_fit_edges']:,} overlap={overlap:,}")
+
+    print()
+    print("V1 (SPEC hard constraints)")
+    for name, res in v1.items():
+        if isinstance(res, dict) and "status" in res:
+            # the credential check is status "n/a" and carries no count
+            print(f"  [{res['status']:>3}] {name:<34} "
+                  f"violations={res.get('n_violations', '-')}")
+
+    print()
+    print("V2 (fidelity; only 13 real campaigns -- read statistic, not p)")
+    for name, d in v2["ks"].items():
+        print(f"  {name:<20} KS={d['statistic']:.4f}  "
+              f"median synth={d['median_synth']:.2f} real={d['median_real']:.2f}")
+    print(f"  dst_in_degree JS   ={v2['dst_in_degree_js']:.4f}")
+
+    write_json(out_json, {
+        "n_campaigns": n,
+        "novelty": {k: v for k, v in nov.items() if k != "max_jaccard"},
+        "max_jaccard_quantiles": {q: float(np.percentile(mx, q)) for q in (50, 95, 99)},
+        "n_exact_zero_jaccard": int((mx == 0).sum()),
+        "v1": v1,
+        "v2": {"ks": v2["ks"], "dst_in_degree_js": v2["dst_in_degree_js"]}})
+    V.plot_v2_figures(v2, figures, graph=ctx["graph"], synth_df=synth, fit_df=fit)
+    V.plot_hourly(synth, ctx["hourly"], figures)
+    print()
+    print(f"figures -> {figures}/")
+    print(f"results -> {out_json}")
+
+
 TASKS = {"baselines": run_baselines, "ablation": run_ablation,
-         "baserate": run_baserate}
+         "baserate": run_baserate, "validate": run_validate}
 
 
 def main():

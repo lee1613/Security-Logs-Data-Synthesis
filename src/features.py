@@ -24,11 +24,17 @@ It was built, measured, and dropped. Measured values:
     benign_fit  (first 200k rows)   credential_novelty = 0.0000
     synth_auth  (first 20k rows)    credential_novelty = 0.3664
 
-It is DEFINITIONALLY zero on any real row. `parse.compute_user_host_counts`
-builds `aggregates["user_host"]` by unioning (src_user, src_computer) with
-(src_user, dst_computer) over the FULL auth corpus -- and the real red-team
-events are inside that corpus. So for any row drawn from real data the pair is
-tautologically already observed. It is nonzero only on synthetic rows, where 1
+It was DEFINITIONALLY zero on any real row, because `user_host` was then built
+over the FULL auth corpus -- every real row's (user, host) pair was inside the
+map that was supposed to judge it novel, holdout rows included.
+
+*** This no longer holds, and it is the most promising v2 feature. *** Once
+`user_host` is bounded to the fit window (the t_hi fix), a holdout row's pair is
+NOT tautologically present, so credential_novelty becomes a real signal rather
+than a synthetic-row marker. It is left out of v1 on purpose: re-adding a
+feature mid-restatement would confound the leak correction with a feature
+change, and v1's numbers have to be comparable to the ones they replace. Measure
+it as a v2 candidate, on its own. It is nonzero only on synthetic rows, where 1
 marks the fallback branch in `walker.generate_campaign` (`pool =
 list(compromised)`, taken when no harvested credential was ever seen on the
 target). That makes it a "this row is synthetic" marker, not an attack signal:
