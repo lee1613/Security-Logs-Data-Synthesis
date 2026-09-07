@@ -57,16 +57,20 @@ augmented arm ranges **0.240 – 0.469** (mean 0.337, sd 0.067) against a real-o
 
 Read jointly with the lift, per the plan's decision rule.
 
+Measured on the fit-window graph (§7.4), 10,000 campaigns / 161,587 rows.
+Reproduce: `python -m scripts.run_day4 validate`.
+
 | metric | value |
 |---|---|
 | max-Jaccard vs the 13 fit campaigns — median, p95, p99 | **0.0** |
-| synth campaigns with max-Jaccard exactly 0 | 9,988 / 10,000 |
-| `pct_near_duplicate` (≥ 0.5) | **0.0002** (2 campaigns) |
-| `edge_novelty_rate` | **0.9983** |
-| distinct synth edges / fit edges / overlap | 100,256 / 299 / **166** |
+| synth campaigns with max-Jaccard exactly 0 | 9,976 / 10,000 |
+| `pct_near_duplicate` (≥ 0.5) | **0.0000** (0 campaigns) |
+| `edge_novelty_rate` | **0.9982** |
+| distinct synth edges / fit edges / overlap | 69,293 / 299 / **122** |
 
-The two "near-duplicates" are both breadth-1 campaigns whose single edge coincides with one of the
-three singleton fit campaigns — coincidence at the smallest possible campaign size, not memorization.
+Not a single campaign now clears the near-duplicate threshold. The generator explores a smaller
+edge set than it did on the full graph (69,293 vs 100,256 distinct edges) — the fit graph simply has
+fewer edges to walk — but the novelty conclusion is unchanged and slightly stronger.
 
 **The generator is not replaying the training campaigns.** It explores overwhelmingly new territory
 within the real graph. Combined with §1 this is the plan's third case: **no lift + high novelty ⇒
@@ -176,12 +180,12 @@ ratio (§4) are unaffected by this.
 
 ## 6. V1 / V2 — fidelity
 
-### V1 (SPEC exit criteria) — 144,228 rows / 10,000 campaigns
+### V1 (SPEC exit criteria) — 161,587 rows / 10,000 campaigns
 
 | check | result |
 |---|---|
 | timestamps strictly increasing within campaign, all Δt > 0 | **PASS** — 0 violations, min Δt = 1 |
-| no campaign beyond the 58-day window | **PASS** — 0 violations, latest 4,955,790 ≤ 5,011,200 |
+| no campaign beyond the 58-day window | **PASS** — 0 violations, latest 4,976,443 ≤ 5,011,200 |
 | every `(src,dst)` is a real graph edge | **PASS** — 0 violations |
 | no credential used before acquisition | **N/A by architecture** |
 
@@ -193,10 +197,10 @@ occur by construction. Reporting it as "passed" would be dishonest.
 
 | field | KS D | p | median synth / real | mean synth / real |
 |---|---|---|---|---|
-| breadth | 0.188 | 0.684 | 9 / 9 | 14.4 / 27.9 |
-| inter-event Δt | 0.004 | 1.000 | 87 / 90 | 340.1 / 344.3 |
-| creds per campaign | 0.358 | 0.054 | 2 / 4 | 2.98 / 11.38 |
-| **dst in-degree (JS divergence)** | **0.350** | — | target **< 0.1** | **MISS** |
+| breadth | 0.154 | 0.875 | 9 / 9 | 16.2 / 27.9 |
+| inter-event Δt | 0.002 | 1.000 | 90 / 90 | 342.4 / 344.3 |
+| creds per campaign | 0.352 | 0.060 | 2 / 4 | 3.03 / 11.38 |
+| **dst in-degree (JS divergence)** | **0.290** | — | target **< 0.1** | **MISS** |
 
 `docs/figures/v2_*.png`
 
@@ -204,14 +208,15 @@ occur by construction. Reporting it as "passed" would be dishonest.
 10,000 synthetic, KS has almost no power; a non-rejection is not a fit. The effect sizes:
 
 - **dst in-degree is the largest gap and the only outright target miss.** Synthetic per-event target
-  in-degree p25/50/75 = **143 / 11,659 / 14,221**; real = **10 / 20 / 104**. The generator hits
-  mega-hub servers; the real red team hit obscure hosts. Robust to binning (0.318 @10 bins → 0.391
-  @50). *Note §4: fixing this by setting β=0 does not repair augmentation — the gap is real but is
-  not the whole story.*
+  in-degree p25/50/75 = **7 / 1,544 / 12,101**; real = **7 / 12 / 40**. The generator hits mega-hub
+  servers; the real red team hit obscure hosts — a ~130x gap at the median. The p25 agrees exactly,
+  so the generator does place *some* attacks on obscure hosts; it is the middle and upper mass it
+  cannot keep off the hubs. *Note §4: fixing this by setting β=0 does not repair augmentation — the
+  gap is real but is not the whole story.*
 - **creds per campaign p=0.054 is a non-rejection, not a fix.** Mean 2.98 vs 11.38, p95 9 vs 41. The
   Day-3 gap-#2 fix landed directionally but under-delivers ~4×.
-- **breadth agrees in the body, not the tail.** Medians match exactly (9/9), p25/p75 match, but p95
-  is 39 synth vs 120 real — `min(k, len(targets))` clips the largest fan-outs.
+- **breadth agrees in the body, not the tail.** Medians match exactly (9/9), but the means diverge
+  (16.2 vs 27.9) — `min(k, len(targets))` clips the largest fan-outs.
 - **inter-event Δt is near-tautological.** The generator bootstraps Δt by resampling the fit values,
   so D=0.004 confirms no placement bug; it is not independent evidence of temporal fidelity.
 - **JS ≈ 0 on the constant categoricals proves nothing** and is deliberately not computed. Both
@@ -219,7 +224,7 @@ occur by construction. Reporting it as "passed" would be dishonest.
 
 ---
 
-## 7. Two defects found and fixed during this evaluation
+## 7. Four defects found and fixed during this evaluation
 
 ### 7.1 The Day-3 benign sampler made the classes edge-disjoint
 
@@ -258,6 +263,51 @@ subprocesses under different `PYTHONHASHSEED` values, because an in-process chec
 rather than one reproducible corpus. This does not change any conclusion — it strengthens §1, since
 all 15 independent k=13 draws show large harm — but it is why the augmented arm is quoted as an
 interval. Re-running under the fix would tighten the intervals, not move them.
+
+### 7.3 The base rate was described as a floor it is not
+
+Covered in full in §5. The holdout's 1:4,033 ratio was reported as the deployment's "natural floor".
+It is a **sampling choice**: the 205,612 negatives are a draw from a window holding ~149M events, so
+the deployment rate is nearer **1:2.9M**, ~725x rarer. Every absolute number here is conditional on
+the sampled rate; comparative numbers are not, because both arms of every comparison sit on the
+identical holdout.
+
+### 7.4 The graph was built from the whole corpus, including the future
+
+The largest of the four, and the last one found. It invalidated every headline number in the
+original version of this report.
+
+`compute_edge_counts` and `compute_user_host_counts` scanned all 58 days. Those aggregates feed
+`features.build_features`, which scores **holdout** rows — so an edge's weight, and therefore its
+`edge_rarity`, was computed partly from the evaluation window itself. They also feed the walker, so
+synthetic campaigns could route over edges that did not exist yet at fit time.
+
+**The mechanism, measured** (`python -m scripts.run_day4 leakcheck`):
+
+| rows sitting on an edge the graph has never seen | full-corpus graph | fit-window graph |
+|---|---:|---:|
+| holdout benign (205,612 rows) | **0.0000%** | 1.5082% (3,101) |
+| holdout red team (51 rows) | **0.0000%** | 17.6471% (9) |
+
+Read the first column. On the full-corpus graph **nothing in the evaluation set can be new**, for
+either class — the graph contains every holdout row's own edge by construction. It was a perfect
+oracle of which machine pairs would ever occur. `edge_rarity`'s extreme value means "this pair is
+new", and that value was simply unreachable at evaluation time.
+
+Bound the graph to the fit window and first-time-seen pairs reappear — on both sides. Those 3,101
+benign rows now tie 9 of the 51 positives at maximum rarity. That is the real deployment problem,
+and it is the one `data_insights.md` predicts: new hires, new projects and someone covering a
+colleague produce first-time pairs constantly, and rarity alone cannot tell them from lateral
+movement.
+
+**What it cost.** Real-only AUC-PR at k=13 falls **0.9026 → 0.4122**. The training-free rarity
+baseline falls **0.530 → 0.0082** — that number was the report's headline insight and was almost
+entirely the leak.
+
+**Why it survived.** A `t_hi` bound existed on two of the aggregates and was covered by tests. No
+caller passed it. A guard nothing calls is documentation, not a fix. `run_day1.py` now builds a
+`fit` arm from the same code path as the `full` arm, and every model-facing consumer reads only the
+`fit` arm.
 
 ---
 

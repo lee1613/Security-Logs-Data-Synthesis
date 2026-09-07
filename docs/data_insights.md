@@ -128,6 +128,22 @@ SPEC v1.2 fan-out correction.)
 | machine the **red team** targeted | 10 | **20** | 104 |
 | machine the **synthetic generator** targeted | 143 | **11,659** | 14,221 |
 
+> **Graph provenance.** The table above is computed on the **full-corpus** graph, which is the right
+> choice for describing the network but is *not* what any model sees — that graph counts all 58 days
+> and so includes the evaluation window (see `validation_report.md` §7.4). Re-measured on the
+> **fit-window** graph the absolute degrees fall, and the gap the section is about gets *wider*:
+>
+> | | p25 | median | p75 |
+> |---|---:|---:|---:|
+> | every machine | 1 | **4** | 5 |
+> | benign event's target | 792 | **12,101** | 12,529 |
+> | red team's target | 7 | **12** | 40 |
+> | generator's target | 7 | **1,544** | 12,101 |
+>
+> The generator's median target is ~130x more connected than the red team's. Its p25 now matches
+> exactly (7 vs 7) — it does place some attacks on obscure hosts; it is the middle and upper mass it
+> cannot keep off the hubs. Reproduce with `python -m scripts.run_day4 validate`.
+
 Read carefully — these three facts are easy to conflate:
 
 - The *typical machine* is obscure: median in-degree **4**.
