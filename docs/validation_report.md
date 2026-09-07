@@ -337,8 +337,13 @@ ceiling · attribute constancy is tool-specific.
 
 Stated first-class, not as an afterthought.
 
-- **51 holdout positives.** Every interval here is wide and every CI uses n=5 seeds with a normal
-  approximation. This is the binding statistical constraint and it cannot grow.
+- **51 holdout positives.** Every interval here is wide. This is the binding statistical constraint
+  and it cannot grow. The scarcity curve now uses 20 seeds precisely because removing the leak
+  exposed how wide the per-seed spread really is (§1); the secondary tasks use 10.
+- **Seed-to-seed variance is the dominant source of uncertainty, not the mean.** On the leak-free
+  graph the real-only arm at k=13 swings across most of the available range depending only on which
+  GBT seed is drawn. Any single-seed number from this pipeline, including in earlier versions of
+  this report, should be read as one draw from a wide distribution.
 - **Per-event altitude has a known ceiling.** Classifying single auth rows discards campaign
   structure, which is where lateral movement actually lives.
 - **Within-operator transfer only.** Same red team, same toolkit, one engagement. A different
@@ -359,12 +364,16 @@ Stated first-class, not as an afterthought.
   AUC-PR figures are conditional on the sampled rate; comparative results are not. The sweep in the
   *hard* direction was not run.
 - **Broad foothold pool is deliberate** (open gap #3), not an oversight.
-- **`credential_novelty` was specified by the plan and removed.** It measured 0.0000 on all 650
-  `redteam_fit` and 200k `benign_fit` rows but 0.3664 on synthetic, because `aggregates["user_host"]`
-  is built from a corpus that contains the red-team events — making it definitionally dead on real
-  data and a "this row is synthetic" marker in training. Rationale is recorded in
-  `src/features.py`'s docstring with a regression test.
-- **Numbers predate the determinism fix** (§7.2).
+- **`credential_novelty` was removed for a reason that no longer holds.** It measured 0.0000 on all
+  650 `redteam_fit` and 200k `benign_fit` rows but 0.3664 on synthetic, because
+  `aggregates["user_host"]` was built over the whole corpus — every real row's pair was inside the
+  map that was supposed to judge it novel, so the feature was definitionally dead on real data and a
+  "this row is synthetic" marker in training. **Under the §7.4 fit-window bound that is no longer
+  true**, and it becomes a genuine candidate feature. It is deliberately left out of this version so
+  the leak correction is not confounded with a feature change; measure it separately.
+- **Everything a model sees now comes from the fit window** (§7.4) — graph, credential-location map,
+  hourly volume and attribute marginals. The full-corpus artifacts are retained for corpus
+  description and for reproducing the leak contrast, and are read by nothing else.
 
 ---
 
