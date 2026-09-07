@@ -1,10 +1,19 @@
 """Day-4 Task 4 -- the scarcity curve. Does synthetic data substitute for scarce
 real data?
 
-Each of the 25 cells (5 k-values x 5 seeds) draws k of the 13 real red-team FIT
-campaigns, REFITS the generator distributions on only those k, regenerates a
-fresh synthetic corpus from that refit, trains two detectors (real-only and
-real+synth) and scores both once on the untouched holdout.
+Each cell (one k-value x one seed) draws k of the 13 real red-team FIT campaigns,
+REFITS the generator distributions on only those k, regenerates a fresh synthetic
+corpus from that refit, trains two detectors (real-only and real+synth) and
+scores both once on the untouched holdout. The grid is day4.scarcity_k x
+day4.n_seeds, with n_seeds overridable on the command line.
+
+THE GRAPH THESE FEATURES COME FROM
+----------------------------------
+build_context loads graph_fit/aggregates_fit -- bounded to time <= the fit window
+-- NOT the full-corpus pair. Unbounded, an edge's weight and therefore its
+edge_rarity were computed partly from the evaluation window, i.e. from the future
+of the row being scored. That leak was worth real-only AUC-PR 0.9026 -> 0.4122;
+every number this file produced before the fix is inflated by it.
 
 WHY THE PER-POINT REFIT IS THE WHOLE TASK
 -----------------------------------------
@@ -35,12 +44,21 @@ build_context so the eval set is bit-identical across every comparison. Each is
 its own subcommand -- none of them re-runs the 25-cell sweep, and none of them
 rewrites day4_results.json.
 
-Run: python scripts/run_day4.py            (Task 4 sweep; ~60-90 min)
-     python scripts/run_day4.py --figure-only   (rebuild the plot from the JSON)
-     python scripts/run_day4.py baselines   (Task 5: TSTR + 3 baselines)
-     python scripts/run_day4.py ablation    (Task 6: structural-only + importances)
-     python scripts/run_day4.py baserate    (Task 9: test-time base-rate sweep)
-     python scripts/run_day4.py all         (Tasks 5+6+9, one context load)
+Run as a MODULE from the repo root -- `python scripts/run_day4.py` puts scripts/
+on sys.path instead of the root and `import src` fails.
+
+     python -m scripts.run_day4 sweep         (Task 4 curve, day4.n_seeds seeds)
+     python -m scripts.run_day4 sweep 20      (same, 20 seeds; ~2.8 h)
+     python -m scripts.run_day4 --figure-only (rebuild the plot from the JSON)
+     python -m scripts.run_day4 baselines     (Task 5: TSTR + 3 baselines)
+     python -m scripts.run_day4 ablation      (Task 6: structural-only + importances)
+     python -m scripts.run_day4 baserate      (Task 9: test-time base-rate sweep)
+     python -m scripts.run_day4 validate      (novelty + SPEC V1 + V2 fidelity)
+     python -m scripts.run_day4 all 10        (all four tasks, 10 seeds, one load)
+
+A trailing integer on any subcommand overrides day4.n_seeds. Only the scarcity
+curve is worth 20 seeds; the per-seed spread on the leak-free graph is wide
+enough that 5 cannot separate the arms.
 """
 import json
 import pickle
@@ -53,6 +71,7 @@ matplotlib.use("Agg")           # headless: no display on the run box
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.stats import ttest_rel
 from sklearn.metrics import average_precision_score
 
 from src.config import load_config
@@ -275,10 +294,30 @@ def summarize(cells, ks):
         vals = [c for c in cells if c["k"] == k]
         if not vals:
             continue
-        out[k] = {"n": len(vals),
-                  "real": mean_ci([c["auc_pr_real"] for c in vals]),
-                  "aug": mean_ci([c["auc_pr_augmented"] for c in vals])}
+        real = [c["auc_pr_real"] for c in vals]
+        aug = [c["auc_pr_augmented"] for c in vals]
+        out[k] = {"n": len(vals), "real": mean_ci(real), "aug": mean_ci(aug),
+                  "paired": paired_test(real, aug)}
     return out
+
+
+def paired_test(real, aug):
+    """Paired t-test on the per-seed lift, plus how many seeds augmentation won.
+
+    Paired because both arms of a cell see the same drawn campaigns, the same
+    synthetic seed and the same holdout -- the only difference is whether
+    synthetic positives were added. Reported because the per-seed spread is wide
+    enough that a mean difference on its own does not establish a direction, and
+    a win count says something a mean cannot: whether an effect is consistent or
+    a large average over opposite-signed cells."""
+    if len(real) < 2:
+        return {"n": len(real), "t": None, "p": None, "mean_lift": None,
+                "sd_lift": None, "n_seeds_aug_wins": None}
+    t, pv = ttest_rel(aug, real)
+    d = np.asarray(aug, dtype=float) - np.asarray(real, dtype=float)
+    return {"n": len(real), "t": float(t), "p": float(pv),
+            "mean_lift": float(d.mean()), "sd_lift": float(d.std(ddof=1)),
+            "n_seeds_aug_wins": int((d > 0).sum())}
 
 
 def plot_curve(summary, path):
@@ -305,14 +344,21 @@ def plot_curve(summary, path):
 
 
 def report(summary):
-    print("\n=== SCARCITY CURVE (mean +/- 95% CI across 5 seeds) ===")
-    print(f"{'k':>3}  {'n':>2}  {'real-only':>18}  {'augmented':>18}  {'lift':>9}")
+    n = max((s["n"] for s in summary.values()), default=0)
+    print(f"\n=== SCARCITY CURVE (mean +/- 95% CI across {n} seeds) ===")
+    print(f"{'k':>3}  {'n':>3}  {'real-only':>18}  {'augmented':>18}  {'lift':>9}"
+          f"  {'t':>7}  {'p':>6}  {'aug wins':>9}")
     for k in sorted(summary):
         s = summary[k]
         rm, rc = s["real"]
         am, ac = s["aug"]
-        print(f"{k:>3}  {s['n']:>2}  {rm:.4f} +/- {rc:.4f}  {am:.4f} +/- {ac:.4f}  "
-              f"{am - rm:>+9.4f}")
+        pt = s["paired"]
+        t = f"{pt['t']:>7.2f}" if pt["t"] is not None else "     --"
+        pv = f"{pt['p']:>6.3f}" if pt["p"] is not None else "    --"
+        wins = (f"{pt['n_seeds_aug_wins']:>4}/{s['n']:<4}"
+                if pt["n_seeds_aug_wins"] is not None else "       --")
+        print(f"{k:>3}  {s['n']:>3}  {rm:.4f} +/- {rc:.4f}  {am:.4f} +/- {ac:.4f}  "
+              f"{am - rm:>+9.4f}  {t}  {pv}  {wins}")
 
 
 # =============================================================================
@@ -725,6 +771,23 @@ def run_baserate(ctx, figures, out_json):
     print(f"\nfigure -> {fig}\nresults -> {out_json}")
 
 
+def dst_indeg_quantiles(synth, fit, graph):
+    """p25/50/75 of per-EVENT target in-degree, both sides.
+
+    The single most legible statement of the generator's failure -- the JS
+    divergence says the distributions differ, these three numbers say how: the
+    generator aims at hubs the real red team avoided. Reported alongside the JS
+    so the direction of the gap is in the artifact, not only in prose.
+    """
+    indeg = dict(graph.in_degree())
+
+    def q(df):
+        v = df["dst_computer"].map(indeg).fillna(0).to_numpy(dtype=float)
+        return {str(p): float(np.percentile(v, p)) for p in (25, 50, 75)}
+
+    return {"synth": q(synth), "real": q(fit)}
+
+
 def run_validate(ctx, figures, out_json):
     """Novelty + SPEC V1 + V2 fidelity on a fresh full-size corpus.
 
@@ -781,7 +844,8 @@ def run_validate(ctx, figures, out_json):
         "max_jaccard_quantiles": {q: float(np.percentile(mx, q)) for q in (50, 95, 99)},
         "n_exact_zero_jaccard": int((mx == 0).sum()),
         "v1": v1,
-        "v2": {"ks": v2["ks"], "dst_in_degree_js": v2["dst_in_degree_js"]}})
+        "v2": {"ks": v2["ks"], "dst_in_degree_js": v2["dst_in_degree_js"],
+               "dst_in_degree_quantiles": dst_indeg_quantiles(synth, fit, ctx["graph"])}})
     V.plot_v2_figures(v2, figures, graph=ctx["graph"], synth_df=synth, fit_df=fit)
     V.plot_hourly(synth, ctx["hourly"], figures)
     print()

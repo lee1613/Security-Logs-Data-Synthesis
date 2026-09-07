@@ -115,3 +115,20 @@ The guard existed for two functions but no caller used it, so the shipped pipeli
 consumed the leaked graph. `run_day1.py` now builds both arms from one code path: a `full` arm for
 corpus description and for reproducing this contrast, and a `fit` arm that is the only thing any
 model is allowed to see.
+
+### 3.5 Two report sections had no code behind them
+
+`src/validate.py` computes the novelty and V1/V2 fidelity statistics, and nothing in the repository
+called it. Sections 2 and 6 of the validation report were produced by a script that was never
+committed. The numbers were not wrong, but they were not reproducible either, which for a report
+whose entire claim is methodological is close to the same thing. `run_day4.py validate` is now that
+caller.
+
+The general lesson, and the reason this is listed with the defects: **an uncommitted analysis script
+is an unreproducible result wearing a table.** If a number reaches a report, the thing that computed
+it belongs in the repo.
+
+---
+
+## 4. What v1 is actually worth
+

@@ -53,10 +53,19 @@ Three more framing corrections this project had to make about itself:
 
 ```bash
 pip install -r requirements.txt
-python -m pytest tests/ -q          # 98 tests
-python scripts/run_day4.py          # scarcity sweep (~90 min)
-python scripts/run_day4.py all      # baselines, ablation, base-rate sweep
+python -m pytest tests/ -q                # 104 tests
+
+# Stage 1 rebuilds both graph arms from the raw corpus (~70 min, 9 full scans).
+# Stages 2-4 need only the artifacts it writes.
+python -m scripts.run_day1
+
+python -m scripts.run_day4 sweep 20      # scarcity curve, 20 seeds (~2.8 h)
+python -m scripts.run_day4 all 10        # baselines, ablation, base-rate, validate
+python -m scripts.run_day4 validate      # novelty + SPEC V1 + V2 fidelity only
 ```
+
+Run these as modules (`-m`), not as file paths: `python scripts/run_day4.py`
+puts `scripts/` on `sys.path` instead of the repo root, and `import src` fails.
 
 ## Modules
 
@@ -70,7 +79,7 @@ python scripts/run_day4.py all      # baselines, ablation, base-rate sweep
 | `src/detect.py` | Class-weighted train/eval harness returning AUC-PR |
 | `src/validate.py` | V1 assertions, V2 distributional tests, novelty metrics |
 
-## Two evaluation defects found and fixed
+## Four evaluation defects found and fixed
 
 Both are documented in full in the validation report; both are the kind that produce
 *better-looking* numbers, which is why they were worth chasing.
@@ -82,6 +91,18 @@ Both are documented in full in the validation report; both are the kind that pro
 2. **Non-reproducible generation.** Credential harvesting indexed a `set` of strings, whose order
    Python randomizes per process, so a fixed seed produced a different corpus every run. Fixed with
    `sorted()`, guarded by a cross-process regression test.
+3. **A base rate described as a floor it is not.** The holdout's 1:4,033 ratio was reported as the
+   deployment's "natural floor". It is a *sampling choice* — the window holds ~149M events, so the
+   true rate is nearer 1:2.9M, ~725× rarer. Absolute numbers are conditional on it; comparative ones
+   are not.
+4. **The graph was built from the whole corpus, including the future.** The aggregates feeding
+   `edge_rarity` counted all 58 days, so a holdout row's rarity was computed partly from the
+   evaluation window itself — and the generator walked that same graph. **Worth 0.9026 → 0.4122.**
+   Over half the original headline number was the leak. Fixed by a `t_hi` bound on every aggregate
+   and, the part that was actually missing, passing it: `run_day1.py` now builds a `fit` arm that is
+   the only graph any model sees.
+
+See [`docs/v1_process.md`](docs/v1_process.md) for the full write-up.
 
 ## Honest-outcome policy
 
