@@ -335,7 +335,8 @@ def plot_curve(summary, path):
     ax.set_xlabel("k = real red-team campaigns available for training")
     ax.set_ylabel("AUC-PR on holdout")
     ax.set_title("Scarcity curve: does synthetic data substitute for scarce real data?\n"
-                 "mean over 5 seeds, 95% CI band (normal approx.)", fontsize=10)
+                 f"mean over {max(v['n'] for v in summary.values())} seeds, "
+                 f"95% CI band (normal approx.)", fontsize=10)
     ax.legend()
     ax.grid(alpha=0.3)
     fig.tight_layout()
@@ -494,7 +495,7 @@ def plot_baselines(res, path):
     ax.set_yticklabels(labels, fontsize=8)
     ax.set_xlabel("AUC-PR on the real holdout (51 pos / 205,612 neg)")
     ax.set_title("V3 baselines + TSTR, all evaluated on the real holdout\n"
-                 "mean over 5 seeds, 95% CI (rarity is training-free: one value)",
+                 f"mean over {len(cells)} seeds, 95% CI (rarity is training-free: one value)",
                  fontsize=10)
     ax.grid(axis="x", alpha=0.3)
     fig.tight_layout()
@@ -573,7 +574,7 @@ def plot_ablation(res, path):
     ax1.set_xticks(x)
     ax1.set_xticklabels(names)
     ax1.set_ylabel("AUC-PR on holdout")
-    ax1.set_title(f"Task 6 ablation at k={res['k']}\n(mean over 5 seeds, 95% CI)",
+    ax1.set_title(f"Task 6 ablation at k={res['k']}\n(mean over {len(res['cells'])} seeds, 95% CI)",
                   fontsize=10)
     ax1.legend(fontsize=8)
     ax1.grid(axis="y", alpha=0.3)
@@ -731,11 +732,24 @@ def run_sweep(cfg):
           f"k-values (missing={missing}, failures={len(failures)})")
 
 
+def compute_or_load(compute, ctx, out_json):
+    """Run the measurement, or with --figure-only reuse the saved results.
+
+    Regenerating a plot should not cost the hour the measurement cost -- which it
+    did, the first time a figure caption needed changing. The sweep already had
+    this; the other three tasks did not.
+    """
+    if "--figure-only" in sys.argv:
+        with open(out_json, encoding="utf-8") as f:
+            return json.load(f)
+    return compute(ctx, out_json)
+
+
 def run_baselines(ctx, figures, out_json):
-    res = baselines(ctx, out_json)
+    res = compute_or_load(baselines, ctx, out_json)
     table(res["cells"], BASELINE_ARMS,
           f"TASK 5: V3 BASELINES + TSTR at k={res['k']} (real holdout, "
-          f"mean +/- 95% CI over 5 seeds)",
+          f"mean +/- 95% CI over {len(res['cells'])} seeds)",
           f"  #3 rarity heuristic, no training, no seed:  {res['rarity_only']:.4f}\n"
           f"  chance (= holdout base rate):               {res['base_rate']:.6f}")
     fig = f"{figures}/baselines_tstr.png"
@@ -744,13 +758,13 @@ def run_baselines(ctx, figures, out_json):
 
 
 def run_ablation(ctx, figures, out_json):
-    res = ablation(ctx, out_json)
+    res = compute_or_load(ablation, ctx, out_json)
     arms = [(f"{arm}::{name}", f"{label} / {name}")
             for name, _ in ABLATIONS
             for arm, label in (("real", "real only"), ("aug", "real + synthetic"))]
     table(res["cells"], arms,
           f"TASK 6: STRUCTURAL-ONLY ABLATION at k={res['k']} "
-          f"(mean +/- 95% CI over 5 seeds)")
+          f"(mean +/- 95% CI over {len(res['cells'])} seeds)")
     for key, label in (("importance_real", "real-only"), ("importance_aug", "augmented")):
         imp = mean_importance(res["cells"], key)
         print(f"\n  GBT feature importance, {label} model (top 6, mean over seeds):")
@@ -764,7 +778,7 @@ def run_ablation(ctx, figures, out_json):
 
 
 def run_baserate(ctx, figures, out_json):
-    res = baserate_sweep(ctx, out_json)
+    res = compute_or_load(baserate_sweep, ctx, out_json)
     report_baserate(res)
     fig = f"{figures}/baserate_sweep.png"
     plot_baserate(res, fig)
