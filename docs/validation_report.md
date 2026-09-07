@@ -2,7 +2,13 @@
 
 **Synthetic lateral-movement data: does it substitute for scarce real attack data?**
 
-Branch `day4-augmentation-eval` · 98 tests · evaluated 2026-08-11
+104 tests · **v1, restated 2026-09-07** on the leak-free fit-window graph (§7.4)
+
+> **This report was rewritten.** Every headline number in the version dated 2026-08-11 was produced
+> on a graph built from the whole 58-day corpus, including the evaluation window. The verdict on
+> synthetic augmentation survived; the numbers supporting it did not, and two secondary conclusions
+> reversed outright. §7.4 has the mechanism, the cost, and why a `t_hi` guard that existed and was
+> tested still failed to prevent it. Process write-up: [`v1_process.md`](v1_process.md).
 
 ---
 
@@ -12,7 +18,8 @@ The detector in this report is a **measuring instrument for synthetic-data quali
 detection-science contribution. Nothing here claims a new way to find lateral movement. Every
 number exists to answer one question: *is this synthetic data useful?*
 
-The answer is **no**, and the evidence is unusually clean.
+The answer is **no**. The evidence is clean; it is not tidy, and the difference matters — see §1 on
+what the leak was smoothing over.
 
 All numbers are AUC-PR (average precision) measured on the **real holdout**, never on synthetic
 data. The holdout is **51 real red-team events / 6 campaigns against 205,612 benign events** — a
@@ -27,29 +34,46 @@ sit on the identical holdout.
 
 ## 1. Headline: the scarcity curve
 
-Does adding synthetic attack data help when real attack data is scarce? Each of 25 cells (5
-k-values × 5 seeds) draws *k* of the 13 real fit campaigns, **refits the generator on only those
+Does adding synthetic attack data help when real attack data is scarce? Each of 100 cells
+(5 k-values x 20 seeds) draws *k* of the 13 real fit campaigns, **refits the generator on only those
 k**, regenerates a fresh 1,000-campaign corpus, and trains two detectors — real-only and
 real+synthetic — scoring both once on the untouched holdout.
+`python -m scripts.run_day4 sweep 20` · 100/100 cells, 0 failures.
 
-| k (real campaigns) | real only | real + synthetic | lift |
-|---:|---|---|---|
-| 1 | 0.430 ± 0.195 | 0.036 ± 0.050 | **−0.394** |
-| 2 | 0.590 ± 0.160 | 0.152 ± 0.130 | **−0.439** |
-| 4 | 0.816 ± 0.071 | 0.212 ± 0.097 | **−0.604** |
-| 8 | 0.825 ± 0.070 | 0.221 ± 0.084 | **−0.604** |
-| 13 | 0.903 ± 0.022 | 0.383 ± 0.073 | **−0.519** |
+| k | real only | real + synthetic | lift | p | seeds augmentation won |
+|---:|---|---|---|---|---:|
+| 1 | 0.240 ± 0.107 | 0.017 ± 0.014 | **−0.223** | 0.0002 | 1 / 20 |
+| 2 | 0.424 ± 0.117 | 0.038 ± 0.017 | **−0.387** | <0.0001 | 0 / 20 |
+| 4 | 0.340 ± 0.131 | 0.072 ± 0.018 | **−0.267** | 0.0007 | 3 / 20 |
+| 8 | 0.593 ± 0.111 | 0.117 ± 0.023 | **−0.477** | <0.0001 | 1 / 20 |
+| 13 | 0.658 ± 0.120 | 0.173 ± 0.018 | **−0.485** | <0.0001 | 3 / 20 |
 
-*mean ± 95% CI across 5 seeds (normal approximation; n=5 is small)* · `docs/figures/scarcity_curve.png`
+*mean ± 95% CI across 20 seeds; p from a paired t-test on the per-seed lift* ·
+`docs/figures/scarcity_curve.png`
 
 **Synthetic augmentation does not fail to help. It actively destroys the detector, at every k.**
+It wins 8 of 100 cells. The verdict is unchanged from the pre-fix version of this report, but it now
+rests on 20 seeds and a paired test rather than on 5 seeds and a gap between means.
 
-The real-only arm behaves exactly as a scarcity curve should — 0.43 at one campaign rising to 0.90
-at thirteen. The augmented arm never comes close, and the damage does not shrink as real data grows.
+### Two things the leak was hiding
 
-Across **15 independent synthetic draws at k=13** (see §7 on why they are independent), the
-augmented arm ranges **0.240 – 0.469** (mean 0.337, sd 0.067) against a real-only range of
-**0.878 – 0.942**. The two distributions do not overlap at any point. This is not a marginal effect.
+**1. The real-only arm is wildly unstable, and the leak concealed it.** At k=13 the real-only score
+ranges **0.087 to 0.872** across seeds — sd 0.274, against the 0.022 CI reported before the fix.
+Nothing differs between those runs but the GBT seed. The old ±0.022 interval was not a measurement
+of a stable detector; it was the leak suppressing variance. **Any single-seed number from this
+pipeline is one draw from a very wide distribution**, and that includes every number in earlier
+versions of this report.
+
+**2. The scarcity curve is not monotonic.** Real-only goes 0.240 → 0.424 → **0.340** → 0.593 →
+0.658. Adding real campaigns from 2 to 4 *lowers* the mean. The pre-fix curve rose smoothly at every
+step (0.430 → 0.590 → 0.816 → 0.825 → 0.903) and looked exactly like a scarcity curve is supposed
+to look. **That tidiness was the leak.** With it removed, the honest statement is that more real
+campaigns help on average but not reliably, and the seed dominates the trend at this sample size.
+
+The augmented arm, by contrast, is *stable* — sd 0.018–0.052 at every k. It is consistently and
+predictably bad. That combination (stable and low, against unstable and higher) is what §3 explains:
+drowned in synthetic positives, the detector abandons `edge_rarity` for a coarse attribute and
+becomes reliably mediocre instead of erratically useful.
 
 ---
 
@@ -350,11 +374,16 @@ detection-useless. Hour-of-day is exactly that here: benign traffic peaks in the
 there are zero off-hours attack examples to learn from.
 
 **Correction to the stated Caveat B premise.** The carried-forward note said the real red team is
-"~100% business-hours". Measured on `redteam_fit` it is **0.748** — 164 of 650 events fall in hours
-18–23 (21:00 n=48, 20:00 n=38). Synthetic is 0.549 against a real *corpus* rate of 0.570: the
+"~100% business-hours". Business hours here means **06:00–17:59** — a definition that used to live
+only in an uncommitted script and is now pinned as `BUSINESS_HOURS` in `run_day4.py`, computed by
+the `validate` task. Measured on `redteam_fit` it is **0.748** — 164 of 650 events fall in hours
+18–23 (21:00 n=48, 20:00 n=38). Synthetic is 0.545 against a real *corpus* rate of 0.569: the
 generator faithfully reproduces the **corpus** hourly profile by construction (`sample_start_time`
 samples hour ∝ corpus volume) and therefore under-represents the red team's business-hour skew.
 The drift is real; its magnitude is **0.55 vs 0.75**, not 0.55 vs ~1.0. `docs/figures/caveat_b_hourly.png`
+
+This section is unaffected by the §7.4 fix: bounding the aggregates to the fit window moves the
+corpus rate only 0.570 → 0.569, because the diurnal rhythm is stable across the 58 days.
 
 Also carried forward: fan-out ≠ multi-hop · don't dress inference as fact · within-operator transfer
 ceiling · attribute constancy is tool-specific.
@@ -408,20 +437,34 @@ Stated first-class, not as an afterthought.
 ## 10. Verdict
 
 **Do not use this synthetic corpus to augment scarce real attack data.** It is worse than nothing:
-it costs 0.39–0.60 AUC-PR at every scarcity level tested, and TSTR is near-useless.
+it costs **0.22–0.48 AUC-PR** at every scarcity level tested (paired p < 0.001 at every k, winning
+8 of 100 cells), and TSTR is near-useless.
 
-The failure is **generative**, and it is not the hub-weighting layer — turning that off changes
-nothing. The corpus is structurally novel (98% new real edges, no memorization) but its per-event
-feature distribution does not match the real attack, and at a 20:1 synthetic-to-real ratio it
-dominates the positive class and pulls the detector onto a coarse tooling attribute.
+The failure is **generative**. The corpus is structurally novel — 99.8% new real edges, not one
+campaign above the near-duplicate threshold — but its per-event feature distribution does not match
+the real attack, and at a ~20:1 synthetic-to-real ratio it dominates the positive class and pulls
+the detector off `edge_rarity` (0.971 importance) and onto `auth_type_NTLM` (0.924).
+
+**The hub-weighting layer is not neutral — it is actively harmful.** The naive generator (β=0, no
+credential bonus) beats the tuned one on 10 of 10 seeds, p=0.0001. The earlier version of this
+report concluded the two were indistinguishable; that was the leak. Turning the sophistication off
+still does not rescue augmentation (naive costs 0.346 against real-only, p=0.008), so the right
+reading is: **the weighting makes a wrong approach worse, and removing it does not make it right.**
 
 The honest framing for anything built on this: **the generator reproduces THIS operator's campaign
-shape, not its detectable structure.**
+shape, not its detectable structure.** It reproduces *permission* and *popularity*; the signal lives
+in *habit*.
 
-The most useful number in this report is the one that required no machine learning at all — **a
-rarity heuristic at 0.530, 59% of the trained ceiling.** Before adding synthesis, that is the bar.
+**What replaced the old closing claim.** The previous verdict ended by pointing at a training-free
+rarity heuristic scoring 0.530 — "59% of the trained ceiling; before adding synthesis, that is the
+bar." **That number was the leak.** On a graph that stops at training time, ranking by `edge_rarity`
+alone scores **0.0082**. There is no cheap baseline that already solves this. The bar is lower than
+v1 claimed, which makes the problem more open, not less — and it makes the wide, unstable real-only
+arm (§1) the honest description of where detection currently stands.
 
 ---
 
-*Reproduce: `python scripts/run_day4.py` (scarcity sweep) · `python scripts/run_day4.py all`
-(baselines, ablation, base-rate) · `python -m pytest tests/ -q` (98 tests)*
+*Reproduce (from the repo root, as modules — see README):*
+*`python -m scripts.run_day4 sweep 20` (scarcity curve) ·*
+*`python -m scripts.run_day4 all 10` (baselines, ablation, base-rate, validate) ·*
+*`python -m scripts.run_day4 leakcheck` (§7.4) · `python -m pytest tests/ -q` (104 tests)*

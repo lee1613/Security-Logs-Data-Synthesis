@@ -8,18 +8,33 @@ Results: [`docs/validation_report.md`](docs/validation_report.md)
 
 ## Headline finding
 
-**The synthetic corpus is worse than nothing as training augmentation.** Across a 25-cell scarcity
-sweep it costs **0.39–0.60 AUC-PR at every level of real-data scarcity**, and a detector trained
-only on synthetic data is near-useless on real attacks (TSTR 0.06–0.12).
+**The synthetic corpus is worse than nothing as training augmentation.** Across a 100-cell scarcity
+sweep (5 k-values x 20 seeds) it costs **0.22–0.48 AUC-PR at every level of real-data scarcity** —
+paired p < 0.001 at every k, winning only 8 of 100 cells — and a detector trained only on synthetic
+data is near-useless on real attacks (TSTR 0.03–0.11).
 
-The failure is **generative**, not structural or attributional. The corpus is genuinely novel — 98%
-of its edges were never traversed by the real red team, with no memorization — but its per-event
-feature distribution does not match the real attack, and at a ~20:1 synthetic-to-real ratio it
-dominates the positive class and pulls the detector onto a coarse tooling attribute (`NTLM`).
+The failure is **generative**. The corpus is genuinely novel — 99.8% of its edges were never
+traversed by the real red team, with no memorization — but its per-event feature distribution does
+not match the real attack, and at a ~20:1 synthetic-to-real ratio it dominates the positive class
+and pulls the detector off `edge_rarity` and onto a coarse tooling attribute (`NTLM`).
 
-The single most useful number required no machine learning at all: **ranking rows by edge rarity
-alone scores 0.530 — 59% of the fully trained detector.** That is the bar any synthesis work has to
-clear.
+**The generator's sophistication is actively harmful.** A deliberately naive version — no hub
+weighting, no credential bonus, random users — beats the tuned generator on 10 of 10 seeds
+(p=0.0001). It still does not rescue augmentation. The weighting makes a wrong approach worse;
+removing it does not make it right.
+
+> ### A correction this README used to get wrong
+>
+> Earlier versions closed with: *"ranking rows by edge rarity alone scores 0.530 — 59% of the fully
+> trained detector; that is the bar any synthesis work has to clear."*
+>
+> **That number was a data leak.** The machine graph was built from all 58 days, so it contained
+> every evaluation row's own edge — meaning *nothing in the holdout could be new*, and `edge_rarity`
+> separated the classes by construction. Rebuilt to stop at training time, the same heuristic scores
+> **0.0082**. There is no cheap baseline that already solves this problem.
+>
+> Full mechanism and cost in [`docs/validation_report.md`](docs/validation_report.md) §7.4; how it
+> survived a guard that existed and was tested, in [`docs/v1_process.md`](docs/v1_process.md).
 
 ## The insight worth carrying
 
