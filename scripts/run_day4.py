@@ -771,6 +771,33 @@ def run_baserate(ctx, figures, out_json):
     print(f"\nfigure -> {fig}\nresults -> {out_json}")
 
 
+# Caveat B's "business hours". 06:00-17:59 inclusive -- recovered by matching the
+# figures the report already quoted (corpus 0.5703, redteam_fit 0.7477) and pinned
+# here because it was previously implicit in an uncommitted script.
+BUSINESS_HOURS = (6, 17)
+
+
+def business_hours_shares(synth, fit, hourly):
+    """Share of events inside BUSINESS_HOURS for synth, the real red team, and the
+    corpus the generator samples its start times from.
+
+    Caveat B: the generator reproduces the CORPUS hourly profile by construction
+    (writer.sample_start_time samples hour proportional to corpus volume), so it
+    under-represents the red team's business-hours skew. A figure, never a feature
+    -- hour_of_day is deliberately excluded from features.py."""
+    lo, hi = BUSINESS_HOURS
+
+    def frac(times):
+        h = (np.asarray(times) // 3600) % 24
+        return float(np.mean((h >= lo) & (h <= hi)))
+
+    c = hourly.set_index("hour")["cnt"].reindex(range(24), fill_value=0)
+    return {"window": f"{lo:02d}:00-{hi:02d}:59",
+            "synth": frac(synth["time"]),
+            "redteam_fit": frac(fit["time"]),
+            "corpus": float(c.loc[lo:hi].sum() / c.sum())}
+
+
 def dst_indeg_quantiles(synth, fit, graph):
     """p25/50/75 of per-EVENT target in-degree, both sides.
 
@@ -838,12 +865,18 @@ def run_validate(ctx, figures, out_json):
               f"median synth={d['median_synth']:.2f} real={d['median_real']:.2f}")
     print(f"  dst_in_degree JS   ={v2['dst_in_degree_js']:.4f}")
 
+    bh = business_hours_shares(synth, fit, ctx["hourly"])
+    print()
+    print(f"CAVEAT B business hours {bh['window']}: synth={bh['synth']:.4f}  "
+          f"redteam_fit={bh['redteam_fit']:.4f}  corpus={bh['corpus']:.4f}")
+
     write_json(out_json, {
         "n_campaigns": n,
         "novelty": {k: v for k, v in nov.items() if k != "max_jaccard"},
         "max_jaccard_quantiles": {q: float(np.percentile(mx, q)) for q in (50, 95, 99)},
         "n_exact_zero_jaccard": int((mx == 0).sum()),
         "v1": v1,
+        "business_hours": bh,
         "v2": {"ks": v2["ks"], "dst_in_degree_js": v2["dst_in_degree_js"],
                "dst_in_degree_quantiles": dst_indeg_quantiles(synth, fit, ctx["graph"])}})
     V.plot_v2_figures(v2, figures, graph=ctx["graph"], synth_df=synth, fit_df=fit)
