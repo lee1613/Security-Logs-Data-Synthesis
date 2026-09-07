@@ -134,14 +134,16 @@ attribute.
 
 The plan requires naming which limit binds. It is **generative**, and both sides of the evidence agree:
 
-- **Not structural** — real-only holds 0.853 on graph structure alone.
-- **Not attributional** — dropping attributes costs real-only 0.05 and *helps* the augmented arm.
-- **Generative** — at k=13 the augmented arm's positive class is **95.6% synthetic** (~14,286 synth
+- **Not structural** — real-only holds **0.688** on graph structure alone, its best score in this
+  report.
+- **Not attributional** — dropping attributes *helps both arms*, so the one-hots were never what the
+  real-only detector was standing on.
+- **Generative** — at k=13 the augmented arm's positive class is ~95% synthetic (roughly 16,000 synth
   events against 650 real). `auth_type` is 100% NTLM on synthetic *and* on real red-team traffic, but
   only 5% of benign. Drowned in synthetic positives, the class-balanced GBT abandons `edge_rarity`
   for that single coarse one-hot — a rule with catastrophic precision at 1:4,000. And even with the
-  crutch removed, the structural-only augmented arm sits at 0.347 against a 0.853 ceiling, because
-  the synthetic *structural* features are themselves wrong (§6).
+  crutch removed, the structural-only augmented arm sits at **0.193 against a 0.688 ceiling**,
+  because the synthetic *structural* features are themselves wrong (§6).
 
 ---
 
@@ -290,7 +292,9 @@ negatives in *both* the train and the eval split, so a detector learned "that re
 fit and was still right on holdout — not by generalizing, but because one global filter carved the
 same hole twice.
 
-**Measured cost of the artifact: GBT AUC-PR 0.999 → 0.894** once repaired. `edge_rarity` alone ranked
+**Measured cost of the artifact: GBT AUC-PR 0.999 → 0.894** once repaired. (Both figures, and the
+0.550 below, were measured before §7.4 — on the leaked graph. They are recorded as the history of
+how this defect was found and fixed, not as current scores.) `edge_rarity` alone ranked
 at 0.550 throughout, which is what exposed it — a 0.999 trained score above a 0.550 single-feature
 score was not credible.
 
