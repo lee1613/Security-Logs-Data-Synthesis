@@ -853,7 +853,53 @@ def run_validate(ctx, figures, out_json):
     print(f"results -> {out_json}")
 
 
-TASKS = {"baselines": run_baselines, "ablation": run_ablation,
+def run_leakcheck(ctx, figures, out_json):
+    """The graph leak in one measurement: how often an evaluation row sits on an
+    edge the graph has never seen.
+
+    edge_rarity is the detector's strongest feature, and its extreme value is
+    "this pair is new". Built over the FULL corpus, the graph contains every
+    holdout row's own edge by construction, so NOTHING in the evaluation set can
+    be new -- the graph is a perfect oracle of which pairs will ever occur. That
+    is what made the training-free rarity baseline look strong. Bounded to the
+    fit window, first-time-seen benign pairs reappear, they tie the positives at
+    maximum rarity, and the baseline collapses.
+    """
+    cfg = ctx["cfg"]
+    sp = load_splits(cfg)
+    full = P.load_graph(cfg["paths"]["graph"])
+    arms = {"full_corpus_graph": full, "fit_window_graph": ctx["graph"]}
+    rows = {"holdout_benign": sp["eval_neg"], "holdout_redteam": sp["eval_pos"]}
+
+    def unseen_rate(df, g):
+        m = [not g.has_edge(a, b)
+             for a, b in zip(df["src_computer"], df["dst_computer"])]
+        return float(np.mean(m)), int(np.sum(m)), len(m)
+
+    out = {}
+    print(f"{'rows on an edge the graph never saw':<38}"
+          f"{'full-corpus':>14}{'fit-window':>14}")
+    for rname, df in rows.items():
+        cells = {gname: unseen_rate(df, g) for gname, g in arms.items()}
+        out[rname] = {g: {"rate": r, "n_unseen": n, "n_rows": t}
+                      for g, (r, n, t) in cells.items()}
+        f_r = cells["full_corpus_graph"][0]
+        t_r = cells["fit_window_graph"][0]
+        print(f"  {rname:<36}{f_r:>13.4%}{t_r:>14.4%}")
+
+    b = out["holdout_benign"]["fit_window_graph"]
+    r = out["holdout_redteam"]["fit_window_graph"]
+    print()
+    print(f"On the fit graph {b['n_unseen']:,} benign rows tie {r['n_unseen']} of the "
+          f"{r['n_rows']} positives at maximum edge_rarity.")
+    print("On the full graph nothing is new, so that collision cannot happen -- "
+          "which is the leak.")
+    write_json(out_json, out)
+    print(f"results -> {out_json}")
+
+
+TASKS = {"leakcheck": run_leakcheck,
+         "baselines": run_baselines, "ablation": run_ablation,
          "baserate": run_baserate, "validate": run_validate}
 
 
