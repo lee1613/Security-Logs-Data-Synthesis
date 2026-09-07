@@ -934,6 +934,23 @@ def run_leakcheck(ctx, figures, out_json):
         t_r = cells["fit_window_graph"][0]
         print(f"  {rname:<36}{f_r:>13.4%}{t_r:>14.4%}")
 
+    # The deployment-gap number section 5 leans on: how much benign traffic is
+    # already at least as rare as the red team. Measured on both graphs because
+    # the leak moves it, and it is the statistic that says why precision stays
+    # poor even when ranking is good.
+    for gname, g in arms.items():
+        rn = F.build_features(sp["eval_neg"], g, ctx["host_users"])["edge_rarity"]
+        rp = F.build_features(sp["eval_pos"][AUTH], g, ctx["host_users"])["edge_rarity"]
+        thr = float(np.percentile(rp.to_numpy(), 5))
+        at_or_above = rn.to_numpy() >= thr
+        out.setdefault("benign_at_redteam_p5_rarity", {})[gname] = {
+            "threshold": thr, "rate": float(at_or_above.mean()),
+            "n_rows": int(at_or_above.sum()), "n_total": int(len(rn))}
+    print()
+    print("benign rows at or above the red team's 5th-percentile edge_rarity:")
+    for gname, d in out["benign_at_redteam_p5_rarity"].items():
+        print(f"  {gname:<22}{d['rate']:>9.4%}  ({d['n_rows']:,} of {d['n_total']:,})")
+
     b = out["holdout_benign"]["fit_window_graph"]
     r = out["holdout_redteam"]["fit_window_graph"]
     print()

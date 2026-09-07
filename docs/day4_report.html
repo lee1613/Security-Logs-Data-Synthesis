@@ -417,7 +417,7 @@ There is no cheap baseline that already solves this.</p>
 <p>The 1:99 number is the one that would look best in a paper and is the least honest — it is bought
 by making the haystack 40× thinner.</p>
 
-<p><strong>But 1:4,033 is not a natural floor either, and this sweep only moves in the easy
+<p><strong>But 1:4,032 is not a natural floor either, and this sweep only moves in the easy
 direction.</strong> The 205,612 negatives are a <em>draw from</em> the holdout window, not the
 window. That window spans 709,189 s — 14.2% of the 58-day timeline — and the graph carries
 1,051,430,459 events, so the window holds on the order of <strong>149 million</strong> events.
@@ -425,13 +425,14 @@ window. That window spans 709,189 s — 14.2% of the 58-day timeline — and the
 positives that is a true base rate near <strong>1:2,900,000</strong> — roughly <strong>725× rarer
 than anything measured here.</strong></p>
 
-<p>The extrapolation is not small. <strong>4.36% of holdout benign already ranks above the red
-team's 5th-percentile edge_rarity</strong> — about 8,900 rows at 205,612 negatives, but on the order
-of 6.5 million at full window volume, against 51 positives. AUC-PR at deployment volume would be far
-below 0.601. How far is <strong>not estimated here</strong>: the sweep that answers it down-samples
-positives rather than negatives, and was not run.</p>
+<p>The extrapolation is not small. <strong>3.47% of holdout benign already ranks at or above the
+red team's 5th-percentile edge_rarity</strong> — 7,136 rows at 205,612 negatives, but on the order
+of 5.2 million at full window volume, against 51 positives. AUC-PR at deployment volume would be far
+below the 0.601 measured here. How far is <strong>not estimated here</strong>: the sweep that answers
+it down-samples positives rather than negatives, and was not run. (The leak flattered this too — it
+read 4.60% on the full-corpus graph.)</p>
 
-<p><strong>Every absolute number on this page is conditional on the 1:4,033 sampled base rate.</strong>
+<p><strong>Every absolute number on this page is conditional on the 1:4,032 sampled base rate.</strong>
 The comparative results are not — both arms of every comparison sit on the identical holdout, so the
 augmentation deficit and the ablation contrasts are unaffected by <em>it</em>. (They were not
 unaffected by the graph leak — see section 07.)</p>

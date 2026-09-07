@@ -245,7 +245,7 @@ and 13 attribute one-hots, and these are not among them.
 2. **The generator's target-selection is the primary defect**, and it is upstream of the `beta`
    knob — `beta=0` yields *uniform over permitted*, which still is not *habit*.
 3. **Distribution-fitting on 13 skewed campaigns is a weak foundation** regardless of what is fitted.
-4. **The haystack is padded with non-candidates**, so the nominal 1:4,033 base rate overstates
+4. **The haystack is padded with non-candidates**, so the nominal 1:4,032 base rate overstates
    difficulty in one direction while the sampling (§5 of the validation report) understates it far
    more in the other.
 

@@ -23,7 +23,7 @@ what the leak was smoothing over.
 
 All numbers are AUC-PR (average precision) measured on the **real holdout**, never on synthetic
 data. The holdout is **51 real red-team events / 6 campaigns against 205,612 benign events** — a
-base rate of **0.000248 (1:4,033)**. Chance is 0.000248.
+base rate of **0.000248 (1:4,032)**. Chance is 0.000248.
 
 That base rate is a **sampling choice, not a deployment property** — the negatives are a draw from
 the holdout window, which itself holds on the order of 149 million events (§5). Every *absolute*
@@ -210,23 +210,26 @@ by making the haystack 40× thinner. Note how much of the apparent competence wa
 floor falls from 0.903 to 0.601. The easier the test, the better the leak's numbers held up —
 which is what a leak does.
 
-**But 1:4,033 is not a natural floor either, and this sweep only moves in the easy direction.** The
+**But 1:4,032 is not a natural floor either, and this sweep only moves in the easy direction.** The
 205,612 negatives are a *draw from* the holdout window, not the window. That window spans
 `[1847858, 2557047]` = 709,189 s, 14.2% of the 58-day timeline, and the graph carries 1,051,430,459
 events — so the window holds on the order of **149 million** events. (Estimated by assuming events
 spread evenly over time; not confirmed by a corpus scan.) Against 51 positives that is a true base
 rate near **1:2,900,000** — roughly **725× rarer than anything measured here**.
 
-The extrapolation is not small. **4.36% of holdout benign already ranks above the red team's
-5th-percentile `edge_rarity`** — about 8,900 rows at 205,612 negatives, but on the order of 6.5
-million at full window volume, against 51 positives. AUC-PR at deployment volume would be far below
-0.903. How far is **not estimated here**; the sweep needed to answer it down-samples positives
-instead of negatives, and was not run.
+The extrapolation is not small. **3.47% of holdout benign already ranks at or above the red team's
+5th-percentile `edge_rarity`** — 7,136 rows at 205,612 negatives, but on the order of 5.2 million at
+full window volume, against 51 positives. AUC-PR at deployment volume would be far below the 0.601
+measured here. How far is **not estimated here**; the sweep needed to answer it down-samples
+positives instead of negatives, and was not run.
+(`python -m scripts.run_day4 leakcheck`, which reports this on both graphs — the leak flattered it
+too, at 4.60%.)
 
-**Every absolute number in this report is conditional on the 1:4,033 sampled base rate.** The
+**Every absolute number in this report is conditional on the 1:4,032 sampled base rate.** The
 comparative results are not — both arms of every comparison sit on the identical holdout, so the
-augmentation deficit (§1), the ablation contrasts (§3), and the rarity baseline's 59%-of-ceiling
-ratio (§4) are unaffected by this.
+augmentation deficit (§1) and the ablation contrasts (§3) are unaffected **by the base rate**. They
+were emphatically not unaffected by the graph leak (§7.4), which is a separate matter and the reason
+this report was rewritten.
 
 ---
 
@@ -318,7 +321,7 @@ interval. Re-running under the fix would tighten the intervals, not move them.
 
 ### 7.3 The base rate was described as a floor it is not
 
-Covered in full in §5. The holdout's 1:4,033 ratio was reported as the deployment's "natural floor".
+Covered in full in §5. The holdout's 1:4,032 ratio was reported as the deployment's "natural floor".
 It is a **sampling choice**: the 205,612 negatives are a draw from a window holding ~149M events, so
 the deployment rate is nearer **1:2.9M**, ~725x rarer. Every absolute number here is conditional on
 the sampled rate; comparative numbers are not, because both arms of every comparison sit on the
@@ -416,7 +419,7 @@ Stated first-class, not as an afterthought.
 - **Negative-class sampling is now non-uniform.** Red-team edges have exhaustive benign coverage
   (§7.1) while all other edges are sampled at ~204k. This is conservative for detection claims —
   it over-represents benign traffic on attack edges — but it is not a uniform sample.
-- **The 1:4,033 base rate is a sampling choice, not a floor** (§5). The holdout window holds ~149M
+- **The 1:4,032 base rate is a sampling choice, not a floor** (§5). The holdout window holds ~149M
   events against 205,612 sampled negatives, implying a true rate near 1:2.9M — ~725× rarer. Absolute
   AUC-PR figures are conditional on the sampled rate; comparative results are not. The sweep in the
   *hard* direction was not run.

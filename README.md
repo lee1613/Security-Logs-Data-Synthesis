@@ -106,7 +106,7 @@ Both are documented in full in the validation report; both are the kind that pro
 2. **Non-reproducible generation.** Credential harvesting indexed a `set` of strings, whose order
    Python randomizes per process, so a fixed seed produced a different corpus every run. Fixed with
    `sorted()`, guarded by a cross-process regression test.
-3. **A base rate described as a floor it is not.** The holdout's 1:4,033 ratio was reported as the
+3. **A base rate described as a floor it is not.** The holdout's 1:4,032 ratio was reported as the
    deployment's "natural floor". It is a *sampling choice* — the window holds ~149M events, so the
    true rate is nearer 1:2.9M, ~725× rarer. Absolute numbers are conditional on it; comparative ones
    are not.

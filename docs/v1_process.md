@@ -88,7 +88,7 @@ subprocess.
 
 ### 3.3 The base rate was described as a floor it is not
 
-The holdout's 1:4,033 base rate was reported as the "natural floor" — the rate the deployment would
+The holdout's 1:4,032 base rate was reported as the "natural floor" — the rate the deployment would
 actually see. It is not. The 205,612 negatives are a *draw from* the holdout window, which holds on
 the order of 149 million events. The true rate is nearer **1:2,900,000**, ~725× rarer. Every absolute
 number is conditional on the sampled rate; comparative numbers are not, since both arms of every
