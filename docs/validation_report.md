@@ -82,21 +82,29 @@ Novelty was never the problem. Fidelity is.
 
 ## 3. Structural-only ablation — is the signal real structure or the NTLM shortcut?
 
+k=13, 10 seeds, fit-window graph. `python -m scripts.run_day4 ablation 10`.
+
 | arm | with attributes | structural only |
 |---|---|---|
-| real only | 0.903 ± 0.022 | **0.853 ± 0.024** |
-| real + synthetic | 0.290 ± 0.031 | **0.347 ± 0.026** |
+| real only | 0.601 ± 0.199 | **0.688 ± 0.141** |
+| real + synthetic | 0.171 ± 0.021 | **0.193 ± 0.020** |
 
-**Detection survives.** Dropping the `auth_type`/`logon_type` one-hots costs the real-only detector
-only 0.05. The real signal is graph structure, not the tooling artifact.
+**Detection survives, and the attributes were never carrying it.** Dropping the
+`auth_type`/`logon_type` one-hots now *improves* the real-only detector by 0.087 and tightens its
+interval. On the leaked graph this looked like a small 0.05 cost; the sign has flipped. Both arms
+are better without attributes, so the one-hots are a liability for this task, not a shortcut worth
+having.
 
-The augmented arm gets *better* when attributes are removed — it was leaning on a crutch the
-real-only model never needed. Feature importances show why:
+Feature importances say what each arm is actually using:
 
 | model | top feature | mass | structural / attribute |
 |---|---|---|---|
-| real only | `edge_rarity` | **0.977** | 0.985 / 0.015 |
-| real + synthetic | `auth_type_NTLM` | **0.944** | 0.055 / 0.945 |
+| real only | `edge_rarity` | **0.971** | 0.980 / 0.020 |
+| real + synthetic | `auth_type_NTLM` | **0.924** | 0.077 / 0.923 |
+
+This is the one headline that the leak did **not** distort: the real-only model rests almost
+entirely on graph position, and the augmented model abandons it for a single coarse tooling
+attribute.
 
 ### Diagnosis: generative, not structural or attributional
 
@@ -115,33 +123,48 @@ The plan requires naming which limit binds. It is **generative**, and both sides
 
 ## 4. V3 — TSTR and the three baselines
 
-All at k=13, on the real holdout.
+All at k=13 on the real holdout, 10 seeds, fit-window graph.
+`python -m scripts.run_day4 baselines 10`.
 
 | arm | AUC-PR |
 |---|---|
-| **#1 real-fit ceiling** (real only) | **0.903 ± 0.022** |
-| **#3 rarity heuristic** — `edge_rarity`, no training at all | **0.530** |
-| real + tuned synthetic | 0.339 ± 0.039 |
-| **#2 real + naive synthetic** | 0.343 ± 0.061 |
-| TSTR — tuned synthetic only | 0.060 ± 0.069 |
-| **#2 TSTR — naive synthetic only** | 0.118 ± 0.096 |
+| **#1 real-fit ceiling** (real only) | **0.601 ± 0.199** |
+| **#2 real + naive synthetic** | **0.255 ± 0.028** |
+| real + tuned synthetic | 0.171 ± 0.021 |
+| **#2 TSTR — naive synthetic only** | 0.113 ± 0.037 |
+| TSTR — tuned synthetic only | 0.033 ± 0.013 |
+| **#3 rarity heuristic** — `edge_rarity`, no training at all | **0.0082** |
 | chance | 0.000248 |
 
-Two results deserve to lead.
+Three results deserve to lead, and two of them reverse what the leaked version of this report said.
 
-**A training-free ranking by edge rarity alone reaches 0.530 — 59% of the trained detector, and
-~2,100× chance.** Most of what the GBT "learns" is available without learning anything. Any claim
-that this task needs machine learning has to clear that bar first.
+**The training-free baseline collapsed.** Ranking by `edge_rarity` alone scores **0.0082**, not
+0.530 — 33x chance rather than 2,100x, and a small fraction of the trained detector instead of 59%
+of it. The old number was the report's most-quoted finding ("most of what the GBT learns is
+available without learning anything"). **It was almost entirely the leak.** §7.4 shows the
+mechanism: on the full-corpus graph no evaluation row could be new, so rarity separated the classes
+by construction. It does not survive contact with a graph that stops at training time.
 
-**TSTR is a failure.** A detector whose positives are purely synthetic is near-useless on real
-attacks (0.060 / 0.118), with confidence intervals that touch zero.
+**Removing the sophistication now helps — significantly.** The naive generator (β=0, no hub
+attraction, no credential bonus, random users) beats the tuned one on **10 of 10 seeds** in the
+augmented arm (0.255 vs 0.171, paired t=+6.25, **p=0.0001**) and 9 of 10 in TSTR (0.113 vs 0.033,
+p=0.0031). The previous version of this section concluded the two were "statistically
+indistinguishable" and that "removing the sophistication neither helps nor hurts". On the leak-free
+graph that is wrong: **the weighting and credential layers actively make the synthetic data worse.**
 
-**Baseline #2 refutes the obvious hypothesis.** We expected the `beta=1` in-degree weighting — which
-drives the generator onto mega-hub servers — to be the culprit. It is not. The naive generator
-(β=0, no hub attraction, no credential restriction, random users) is statistically indistinguishable
-from the tuned one in both the augmented arm (0.343 vs 0.339) and TSTR (0.118 vs 0.060, CIs
-overlapping). **Removing the sophistication neither helps nor hurts.** Whatever breaks this data is
-not the weighting layer.
+That is consistent with the structural argument in §6 and `data_insights.md` §4 — β>0 steers the
+generator toward mega-hub servers, which is precisely the direction the real red team did not go. It
+does not mean β=0 repairs augmentation: naive synthetic still costs 0.346 against real-only
+(p=0.0081, winning 2 of 10 seeds). It means the sophistication is a net negative on top of an
+approach that is already wrong.
+
+**TSTR remains a failure.** A detector whose positives are purely synthetic is near-useless on real
+attacks (0.033 / 0.113) — better than the collapsed rarity heuristic, which says more about the
+heuristic than about the synthetic data.
+
+**The real-fit ceiling is far lower and far less stable than reported**: 0.601 ± 0.199 against the
+leaked 0.903 ± 0.022. The interval is ten times wider. See §1 and §9 on why that width, not the
+mean, is now the dominant fact about this detector.
 
 ---
 
@@ -149,14 +172,19 @@ not the weighting layer.
 
 All 51 positives retained at every point; only benign is down-sampled.
 
+10 seeds, fit-window graph. `python -m scripts.run_day4 baserate 10`.
+
 | target | achieved | positives | negatives | AUC-PR |
 |---|---|---:|---:|---|
-| **sampled floor** | **1:4,033** | 51 | 205,612 | **0.903 ± 0.022** |
-| 0.001 | 1:999 | 51 | 50,949 | 0.974 ± 0.011 |
-| 0.01 | 1:99 | 51 | 5,049 | 0.999 ± 0.002 |
+| **sampled floor** | **1:4,032** | 51 | 205,612 | **0.601 ± 0.199** |
+| 0.001 | 1:999 | 51 | 50,949 | 0.763 ± 0.175 |
+| 0.01 | 1:99 | 51 | 5,049 | 0.957 ± 0.046 |
 
 The 1:99 number is the one that would look best in a paper and is the least honest — it is bought
-by making the haystack 40× thinner.
+by making the haystack 40× thinner. Note how much of the apparent competence was the base rate
+*and* the leak together: 0.999 at 1:99 on the leaked graph becomes 0.957 here, while the sampled
+floor falls from 0.903 to 0.601. The easier the test, the better the leak's numbers held up —
+which is what a leak does.
 
 **But 1:4,033 is not a natural floor either, and this sweep only moves in the easy direction.** The
 205,612 negatives are a *draw from* the holdout window, not the window. That window spans
