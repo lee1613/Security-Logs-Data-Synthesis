@@ -15,7 +15,7 @@ def main():
     fo = cfg["fanout"]
 
     graph = P.load_graph(p["graph_fit"])   # generator input => fit arm
-    with open(p["aggregates"], "rb") as f:
+    with open(p["aggregates_fit"], "rb") as f:   # host_users/hourly => fit arm
         agg = pickle.load(f)
     fit = pd.read_csv(p["redteam_fit"])
 
