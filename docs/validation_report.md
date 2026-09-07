@@ -2,13 +2,13 @@
 
 **Synthetic lateral-movement data: does it substitute for scarce real attack data?**
 
-104 tests · **v1, restated 2026-09-07** on the leak-free fit-window graph (§7.4)
+104 tests · **v0, restated 2026-09-07** on the leak-free fit-window graph (§7.4)
 
 > **This report was rewritten.** Every headline number in the version dated 2026-08-11 was produced
 > on a graph built from the whole 58-day corpus, including the evaluation window. The verdict on
 > synthetic augmentation survived; the numbers supporting it did not, and two secondary conclusions
 > reversed outright. §7.4 has the mechanism, the cost, and why a `t_hi` guard that existed and was
-> tested still failed to prevent it. Process write-up: [`v1_process.md`](v1_process.md).
+> tested still failed to prevent it. Process write-up: [`v0_process.md`](v0_process.md).
 
 ---
 
@@ -283,6 +283,8 @@ occur by construction. Reporting it as "passed" would be dishonest.
 
 ## 7. Four defects found and fixed during this evaluation
 
+*Standalone, shareable version of this section: [`evaluation_defects.md`](evaluation_defects.md).*
+
 ### 7.1 The Day-3 benign sampler made the classes edge-disjoint
 
 `src/benign.py` dropped every sampled benign row whose `(src,dst)` was a red-team edge, using the
@@ -466,7 +468,7 @@ in *habit*.
 rarity heuristic scoring 0.530 — "59% of the trained ceiling; before adding synthesis, that is the
 bar." **That number was the leak.** On a graph that stops at training time, ranking by `edge_rarity`
 alone scores **0.0082**. There is no cheap baseline that already solves this. The bar is lower than
-v1 claimed, which makes the problem more open, not less — and it makes the wide, unstable real-only
+v0 claimed, which makes the problem more open, not less — and it makes the wide, unstable real-only
 arm (§1) the honest description of where detection currently stands.
 
 ---

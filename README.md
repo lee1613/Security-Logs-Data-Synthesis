@@ -34,7 +34,7 @@ removing it does not make it right.
 > **0.0082**. There is no cheap baseline that already solves this problem.
 >
 > Full mechanism and cost in [`docs/validation_report.md`](docs/validation_report.md) §7.4; how it
-> survived a guard that existed and was tested, in [`docs/v1_process.md`](docs/v1_process.md).
+> survived a guard that existed and was tested, in [`docs/v0_process.md`](docs/v0_process.md).
 
 ## The insight worth carrying
 
@@ -117,7 +117,9 @@ Both are documented in full in the validation report; both are the kind that pro
    and, the part that was actually missing, passing it: `run_day1.py` now builds a `fit` arm that is
    the only graph any model sees.
 
-See [`docs/v1_process.md`](docs/v1_process.md) for the full write-up.
+Standalone failure record, self-contained and shareable: [`docs/evaluation_defects.md`](docs/evaluation_defects.md) — the four above plus a fifth (two report sections produced by uncommitted code).
+
+See [`docs/v0_process.md`](docs/v0_process.md) for the full write-up.
 
 ## Honest-outcome policy
 

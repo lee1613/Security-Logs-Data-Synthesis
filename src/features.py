@@ -28,13 +28,13 @@ It was DEFINITIONALLY zero on any real row, because `user_host` was then built
 over the FULL auth corpus -- every real row's (user, host) pair was inside the
 map that was supposed to judge it novel, holdout rows included.
 
-*** This no longer holds, and it is the most promising v2 feature. *** Once
+*** This no longer holds, and it is the most promising v1 feature. *** Once
 `user_host` is bounded to the fit window (the t_hi fix), a holdout row's pair is
 NOT tautologically present, so credential_novelty becomes a real signal rather
-than a synthetic-row marker. It is left out of v1 on purpose: re-adding a
+than a synthetic-row marker. It is left out of v0 on purpose: re-adding a
 feature mid-restatement would confound the leak correction with a feature
-change, and v1's numbers have to be comparable to the ones they replace. Measure
-it as a v2 candidate, on its own. It is nonzero only on synthetic rows, where 1
+change, and v0's numbers have to be comparable to the ones they replace. Measure
+it as a v1 candidate, on its own. It is nonzero only on synthetic rows, where 1
 marks the fallback branch in `walker.generate_campaign` (`pool =
 list(compromised)`, taken when no harvested credential was ever seen on the
 target). That makes it a "this row is synthetic" marker, not an attack signal:

@@ -1,7 +1,7 @@
-# V1 — how this generator was built, and what it is worth
+# V0 — how this generator was built, and what it is worth
 
 A process record for the first complete version of the synthetic lateral-movement pipeline.
-It exists to be argued with: v2 should start from the specific place v1 fails, not from scratch.
+It exists to be argued with: v1 should start from the specific place v0 fails, not from scratch.
 
 Companion documents — this one does not repeat them:
 
@@ -13,7 +13,7 @@ Companion documents — this one does not repeat them:
 
 ---
 
-## 1. What v1 is
+## 1. What v0 is
 
 Four stages, each a script, each writing artifacts the next one reads.
 
@@ -61,7 +61,7 @@ The design that makes that question answerable:
 ### The honest-outcome policy
 
 Nothing was tuned. No hyperparameter search, no threshold picking, no re-running until the curve
-improved. Where a check failed it is reported as failed. This mattered more than expected: v1's
+improved. Where a check failed it is reported as failed. This mattered more than expected: v0's
 result is negative, and the temptation to keep adjusting until it was not is exactly what the policy
 is for.
 
@@ -130,7 +130,7 @@ it belongs in the repo.
 
 ---
 
-## 4. What v1 is actually worth
+## 4. What v0 is actually worth
 
 Everything below is measured on the leak-free fit-window graph, 20 seeds for the scarcity curve and
 10 for the rest. The "before" column is the same pipeline on the full-corpus graph — i.e. what this
@@ -183,9 +183,9 @@ reliable and nearly worthless at a 1:4,000 base rate.
 
 ---
 
-## 5. Where v1 fails, stated precisely
+## 5. Where v0 fails, stated precisely
 
-This is the section to argue with. Everything above is bookkeeping; this is the input to v2.
+This is the section to argue with. Everything above is bookkeeping; this is the input to v1.
 
 ### The defect is target selection, and it is upstream of every knob
 
@@ -227,7 +227,7 @@ stably, for weeks. Every red-team login in this corpus was **permitted** — rea
 domain approved every one, all `Success`. Authentication worked exactly as designed. The only
 separator is prior history: one pair had ~219,000 previous events, the other about 3.
 
-So the target for v2 is not "generate plausible auth rows" — v1 already does that, and V1's hard
+So the target for v1 is not "generate plausible auth rows" — v0 already does that, and SPEC V1's hard
 constraints pass. It is:
 
 1. **Model habit, not permission.** A per-credential distribution over *its own* stable host set,
@@ -245,21 +245,23 @@ the permission set. This is an architectural limit, not a parameter to tune.
   and dropped as a synthetic-row marker — but that was an artifact of building `user_host` over the
   whole corpus, so every real row's pair was inside the map judging it novel. Under the `t_hi` bound
   a holdout pair is no longer tautologically present. Measure it on its own; it is deliberately not
-  in v1 so the leak correction stays unconfounded with a feature change.
+  in v0 so the leak correction stays unconfounded with a feature change.
 - **Two strong signals are computed nowhere.** `is_self_auth` (0.00% red team / 53.48% benign) and
   `is_machine_account` (0.00% / 60.32%) would remove a large share of the haystack for almost no
   cost. Both carry the label-construction caveat in `data_insights.md` §2, which is exactly why they
   deserve a deliberate decision rather than silent omission.
 - **Thirteen campaigns is a weak foundation for distribution fitting**, whatever is being fitted.
-  Any v2 that keeps a fit-distributions architecture inherits this. Worth deciding up front whether
+  Any v1 that keeps a fit-distributions architecture inherits this. Worth deciding up front whether
   the generator should be fitted at all, or specified from the structural argument above.
 
 ### The bar to clear
 
-Not the trained detector — the **training-free one**. Ranking rows by `edge_rarity` alone, with no
-model, gets a large fraction of the trained detector's score. Any synthesis work has to beat that
-before it has earned its complexity, and the honest comparison is against the *rarity heuristic*,
-not against chance.
+The **real-only detector**, and nothing cheaper. On the leaked graph this section used to name the
+training-free rarity heuristic as the bar — it scored 0.530, 59% of the trained detector. On the
+fit-window graph it scores **0.0082**. That bar was the leak; there is no shortcut baseline already
+solving this. So v1 is measured against the real-only arm (0.658 ± 0.120 at k=13, and note the
+spread), and the question it has to answer is whether adding synthetic positives moves that number
+up rather than down.
 
 ---
 
