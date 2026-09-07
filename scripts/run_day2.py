@@ -14,7 +14,7 @@ def main():
     p = cfg["paths"]
     fo = cfg["fanout"]
 
-    graph = P.load_graph(p["graph"])
+    graph = P.load_graph(p["graph_fit"])   # generator input => fit arm
     with open(p["aggregates"], "rb") as f:
         agg = pickle.load(f)
     fit = pd.read_csv(p["redteam_fit"])
@@ -32,7 +32,7 @@ def main():
         max_creds=fo["max_harvest_creds"], seed=cfg["seed"])
     secs = time.time() - t
 
-    out_path = p["graph"].replace("graph.pkl", "synth_campaigns.pkl")
+    out_path = "data/derived/synth_campaigns.pkl"
     W.save_campaigns(campaigns, out_path)
 
     # V1 (subset): every generated edge exists in the graph

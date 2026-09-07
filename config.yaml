@@ -5,6 +5,11 @@ paths:
   redteam_gz: data/raw/redteam.txt.gz
   aggregates: data/derived/aggregates.pkl
   graph: data/derived/graph.pkl
+  # Fit-windowed twins of the two above (time <= day3.fit_window[1]). These are
+  # what every MODEL consumes -- detector features and the generator's walk.
+  # The unwindowed pair stays for corpus description and the leak contrast.
+  aggregates_fit: data/derived/aggregates_fit.pkl
+  graph_fit: data/derived/graph_fit.pkl
   redteam_full: data/derived/redteam_full.csv
   redteam_fit: data/derived/redteam_fit.csv
   redteam_holdout: data/derived/redteam_holdout.csv

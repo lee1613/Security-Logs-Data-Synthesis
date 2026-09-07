@@ -47,12 +47,21 @@ def _redteam_rel(rt_path):
 def _window(t_hi):
     """WHERE clause bounding a scan to the fit window, or nothing at all.
 
-    t_hi exists because these aggregates feed `features.build_features`, which
-    scores the HOLDOUT rows. Counting the whole 58-day file means an edge's
-    weight -- and therefore its edge_rarity -- includes traffic from the
-    evaluation window, i.e. the future relative to training. Measured cost of
-    that leak: real-only AUC-PR 0.9026 -> 0.4122 once the graph is rebuilt with
-    t_hi = day3.fit_window[1]. Pass t_hi for anything the detector consumes.
+    Every aggregate here is read by something that must not see the evaluation
+    window:
+
+      edges, user_host -> `features.build_features`, which scores HOLDOUT rows.
+        Counting the whole 58-day file means an edge's weight -- and therefore
+        its edge_rarity -- includes traffic from the future relative to
+        training. Measured cost of that leak: real-only AUC-PR 0.9026 -> 0.4122.
+      edges, user_host -> `walker`, which walks the topology to synthesise
+        campaigns, and would otherwise traverse edges that do not exist yet.
+      hourly, marginals -> `writer`, which places campaign start times and fills
+        row attributes from distributions that would otherwise be the holdout's.
+
+    Pass t_hi = day3.fit_window[1] for anything a model consumes. The default is
+    unbounded because run_day1 also builds a full-corpus arm for description and
+    for the leak contrast above.
     """
     return "" if t_hi is None else f"WHERE time <= {int(t_hi)} "
 
@@ -80,21 +89,34 @@ def compute_user_host_counts(con, auth_path, t_hi=None):
     ).df()
 
 
-def compute_hourly_volume(con, auth_path):
+def compute_hourly_volume(con, auth_path, t_hi=None):
     return con.execute(
         f"SELECT (time // 3600) % 24 AS hour, COUNT(*) AS cnt "
-        f"FROM {_auth_rel(auth_path)} GROUP BY 1 ORDER BY 1"
+        f"FROM {_auth_rel(auth_path)} {_window(t_hi)}GROUP BY 1 ORDER BY 1"
     ).df()
 
 
-def compute_marginals(con, auth_path):
-    rel = _auth_rel(auth_path)
-    out = {}
-    for col in ("auth_type", "logon_type", "auth_orientation", "success"):
-        out[col] = con.execute(
-            f"SELECT {col} AS value, COUNT(*) AS cnt FROM {rel} GROUP BY 1"
-        ).df()
-    return out
+MARGINAL_COLS = ("auth_type", "logon_type", "auth_orientation", "success")
+
+
+def compute_marginals(con, auth_path, t_hi=None):
+    """Per-column value counts for the four categorical auth fields.
+
+    ponytail: ONE grouped scan over all four columns, then split in pandas --
+    a scan of the 1B-row gzip costs ~40 min and four of them is most of an
+    afternoon. The joint group-by is safe because these columns are all
+    low-cardinality (~30 x ~10 x ~6 x 2), so the intermediate is a few thousand
+    rows. Ceiling: if a high-cardinality column is ever added here, split it back
+    out into its own scan rather than widening this group-by.
+    """
+    cols = ", ".join(MARGINAL_COLS)
+    joint = con.execute(
+        f"SELECT {cols}, COUNT(*) AS cnt "
+        f"FROM {_auth_rel(auth_path)} {_window(t_hi)}GROUP BY {cols}"
+    ).df()
+    return {c: (joint.groupby(c, dropna=False, as_index=False)["cnt"].sum()
+                     .rename(columns={c: "value"}))
+            for c in MARGINAL_COLS}
 
 
 def recover_redteam(con, auth_path, rt_path):

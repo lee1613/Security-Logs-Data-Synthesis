@@ -139,3 +139,24 @@ def test_t_hi_none_is_unbounded(con, mini_auth_path):
     """Default must not change existing behaviour -- run_day1 relies on it."""
     assert (len(P.compute_edge_counts(con, mini_auth_path))
             == len(P.compute_edge_counts(con, mini_auth_path, t_hi=None)) == 5)
+
+
+def test_hourly_volume_respects_t_hi(con, mini_auth_path):
+    """hourly places synthetic campaign start times. Unbounded, the generator
+    samples the diurnal rhythm of the evaluation window it is meant to predate."""
+    d = _lookup(P.compute_hourly_volume(con, mini_auth_path, t_hi=4), ["hour"], "cnt")
+    assert d == {(0,): 4}             # t=1,2,3,4 only; 3601 (h1) and 7201 (h2) gone
+
+
+def test_marginals_respect_t_hi(con, mini_auth_path):
+    """marginals fill synthetic row attributes -- same argument as hourly."""
+    m = P.compute_marginals(con, mini_auth_path, t_hi=4)
+    assert _lookup(m["auth_type"], ["value"], "cnt") == {("Ntlm",): 3, ("Kerberos",): 1}
+    assert _lookup(m["success"], ["value"], "cnt") == {("Success",): 3, ("Failure",): 1}
+    assert "?" not in [r["value"] for _, r in m["auth_type"].iterrows()]  # t=3601
+
+
+def test_aggregate_t_hi_defaults_stay_unbounded(con, mini_auth_path):
+    """Every aggregate must default to the whole file; Day-1 builds both arms."""
+    assert (P.compute_hourly_volume(con, mini_auth_path)["cnt"].sum()
+            == P.compute_marginals(con, mini_auth_path)["success"]["cnt"].sum() == 6)

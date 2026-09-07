@@ -130,8 +130,10 @@ def stack(pos_frames, neg_frame):
 def build_context(cfg):
     """Everything constant across all 25 cells, loaded once."""
     t0 = time.time()
-    graph = P.load_graph(cfg["paths"]["graph"])
-    with open(cfg["paths"]["aggregates"], "rb") as f:
+    # graph_fit / aggregates_fit, never the full-corpus pair: these feed both
+    # build_features (which scores holdout rows) and the walker. See parse._window.
+    graph = P.load_graph(cfg["paths"]["graph_fit"])
+    with open(cfg["paths"]["aggregates_fit"], "rb") as f:
         agg = pickle.load(f)
     host_users = W.build_host_users(agg["user_host"])
     sp = load_splits(cfg)
@@ -726,6 +728,12 @@ def main():
     figures = cfg["day4"]["figures_dir"].rstrip("/")
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     cmd = args[0] if args else "sweep"
+    # Optional seed-count override: `run_day4.py sweep 20`. The scarcity curve is
+    # the headline and needs the power; the other three tasks do not earn 4x the
+    # compute, so the count belongs on the command line, not pinned in config.
+    if len(args) > 1:
+        cfg["day4"]["n_seeds"] = int(args[1])
+    print(f"n_seeds={cfg['day4']['n_seeds']}")
 
     if cmd == "sweep":
         return run_sweep(cfg)
