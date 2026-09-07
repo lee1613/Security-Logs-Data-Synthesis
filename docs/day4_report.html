@@ -178,11 +178,21 @@
 <header>
   <p class="eyebrow">Validation Report · Day 4</p>
   <h1>Does synthetic attack data substitute for scarce real attack data?</h1>
-  <p class="standfirst">No. It is measurably worse than using nothing at all — and the two cleanest
-  numbers in the study are the ones that took no machine learning to produce.</p>
+  <p class="standfirst">No — it is measurably worse than using nothing at all, across 100 cells and
+  every level of scarcity. But this page has been rewritten: the numbers that once supported that
+  answer came from a leaking graph, and two of its secondary conclusions were wrong.</p>
   <div class="meta">
-    <span>branch day4-augmentation-eval</span><span>98 tests</span>
-    <span>eval: 51 pos / 205,612 neg</span><span>sampled base rate 1:4,033</span>
+    <span>v1 · restated 2026-09-07</span><span>104 tests</span>
+    <span>eval: 51 pos / 205,612 neg</span><span>sampled base rate 1:4,032</span><span>fit-window graph</span>
+  </div>
+  <div class="callout">
+    <span class="lbl">This report was rewritten</span>
+    <p>Every headline number in the 2026-08-11 version was produced on a machine graph built from all
+    58 days &mdash; including the evaluation window. The verdict on synthetic augmentation survived
+    and is now better supported (20 seeds, paired tests). The supporting numbers did not, and two
+    conclusions reversed: the training-free rarity baseline fell from <strong>0.530 to 0.0082</strong>,
+    and the &ldquo;naive generator is indistinguishable from the tuned one&rdquo; finding became
+    <strong>naive wins 10 of 10 seeds</strong>. Mechanism in section 07.</p>
   </div>
 </header>
 
@@ -197,15 +207,15 @@ exists to answer one question: <em>is this synthetic data useful?</em></p>
 </div>
 
 <div class="readout">
-  <div class="cell"><span class="k">Real only, k=13</span><span class="v real">0.903</span><span class="n">the ceiling</span></div>
-  <div class="cell"><span class="k">Real + synthetic</span><span class="v synth">0.337</span><span class="n">15 independent draws</span></div>
-  <div class="cell"><span class="k">Rarity, no training</span><span class="v">0.530</span><span class="n">59% of the ceiling</span></div>
-  <div class="cell"><span class="k">Synth only (TSTR)</span><span class="v synth">0.060</span><span class="n">near-useless</span></div>
+  <div class="cell"><span class="k">Real only, k=13</span><span class="v real">0.658</span><span class="n">ceiling, sd 0.274</span></div>
+  <div class="cell"><span class="k">Real + synthetic</span><span class="v synth">0.173</span><span class="n">20 seeds, p&lt;0.0001</span></div>
+  <div class="cell"><span class="k">Rarity, no training</span><span class="v">0.0082</span><span class="n">was 0.530 &mdash; that was the leak</span></div>
+  <div class="cell"><span class="k">Synth only (TSTR)</span><span class="v synth">0.033</span><span class="n">near-useless</span></div>
 </div>
 
 <div class="col">
 <h2><span class="num">01</span>Headline — the scarcity curve</h2>
-<p class="sub">25 cells · 5 k-values × 5 seeds · synth regenerated per point</p>
+<p class="sub">100 cells · 5 k-values × 20 seeds · synth regenerated per point · fit-window graph</p>
 <p>Each cell draws <em>k</em> of the 13 real fit campaigns, <strong>refits the generator on only
 those k</strong>, regenerates a fresh corpus, and trains two detectors — scoring both once on the
 untouched holdout.</p>
@@ -260,23 +270,28 @@ untouched holdout.</p>
 
 <div class="scroll">
 <table>
-  <thead><tr><th class="num">k</th><th class="num">real only</th><th class="num">real + synthetic</th><th class="num">lift</th></tr></thead>
+  <thead><tr><th class="num">k</th><th class="num">real only</th><th class="num">real + synthetic</th><th class="num">lift</th><th class="num">p</th><th class="num">aug wins</th></tr></thead>
   <tbody>
-    <tr><td class="num">1</td><td class="num">0.430 ± 0.195</td><td class="num">0.036 ± 0.050</td><td class="num neg">−0.394</td></tr>
-    <tr><td class="num">2</td><td class="num">0.590 ± 0.160</td><td class="num">0.152 ± 0.130</td><td class="num neg">−0.439</td></tr>
-    <tr><td class="num">4</td><td class="num">0.816 ± 0.071</td><td class="num">0.212 ± 0.097</td><td class="num neg">−0.604</td></tr>
-    <tr><td class="num">8</td><td class="num">0.825 ± 0.070</td><td class="num">0.221 ± 0.084</td><td class="num neg">−0.604</td></tr>
-    <tr class="hl"><td class="num">13</td><td class="num">0.903 ± 0.022</td><td class="num">0.383 ± 0.073</td><td class="num neg">−0.519</td></tr>
+    <tr><td class="num">1</td><td class="num">0.240 ± 0.107</td><td class="num">0.017 ± 0.014</td><td class="num neg">−0.223</td><td class="num">0.0002</td><td class="num">1 / 20</td></tr>
+    <tr><td class="num">2</td><td class="num">0.424 ± 0.117</td><td class="num">0.038 ± 0.017</td><td class="num neg">−0.387</td><td class="num">&lt;0.0001</td><td class="num">0 / 20</td></tr>
+    <tr><td class="num">4</td><td class="num">0.340 ± 0.131</td><td class="num">0.072 ± 0.018</td><td class="num neg">−0.267</td><td class="num">0.0007</td><td class="num">3 / 20</td></tr>
+    <tr><td class="num">8</td><td class="num">0.593 ± 0.111</td><td class="num">0.117 ± 0.023</td><td class="num neg">−0.477</td><td class="num">&lt;0.0001</td><td class="num">1 / 20</td></tr>
+    <tr class="hl"><td class="num">13</td><td class="num">0.658 ± 0.120</td><td class="num">0.173 ± 0.018</td><td class="num neg">−0.485</td><td class="num">&lt;0.0001</td><td class="num">3 / 20</td></tr>
   </tbody>
 </table>
 </div>
 
 <div class="col">
 <p><strong>Synthetic augmentation does not fail to help. It destroys the detector, at every k.</strong>
-The real-only arm behaves exactly as a scarcity curve should. The augmented arm never comes close,
-and the damage does not shrink as real data accumulates.</p>
-<p>Across <strong>15 independent synthetic draws</strong> at k=13, the augmented arm ranges
-0.240–0.469 against a real-only range of 0.878–0.942. The distributions do not overlap at any point.</p>
+Augmentation wins 8 of 100 cells, and the paired test rejects at every k.</p>
+<p><strong>Two things the leak was hiding.</strong> First, the real-only arm is wildly unstable: at
+k=13 it ranges <strong>0.087–0.872</strong> across seeds (sd 0.274) against the ±0.022 interval
+reported before the fix. Nothing differs between those runs but the GBT seed. Second, the curve is
+<strong>not monotonic</strong> — 0.240 → 0.424 → <em>0.340</em> → 0.593 → 0.658. The pre-fix curve
+rose smoothly at every step and looked exactly like a scarcity curve should. That tidiness was the
+leak.</p>
+<p>The augmented arm, by contrast, is stable at every k (sd 0.018–0.052) — consistently mediocre
+rather than erratically useful. That asymmetry is the finding.</p>
 
 <h2><span class="num">02</span>Novelty — is it just replaying the training data?</h2>
 <p class="sub">10,000 synthetic campaigns vs the 13 fit campaigns</p>
@@ -287,10 +302,10 @@ and the damage does not shrink as real data accumulates.</p>
   <thead><tr><th>metric</th><th class="num">value</th></tr></thead>
   <tbody>
     <tr><td>max-Jaccard vs fit campaigns — median, p95, p99</td><td class="num">0.0</td></tr>
-    <tr><td>campaigns with max-Jaccard exactly 0</td><td class="num">9,988 / 10,000</td></tr>
-    <tr><td>near-duplicate rate (≥ 0.5)</td><td class="num">0.0002 (2)</td></tr>
-    <tr class="hl"><td>edge novelty rate</td><td class="num pos">0.9983</td></tr>
-    <tr><td>distinct synth edges / fit edges / overlap</td><td class="num">100,256 / 299 / 166</td></tr>
+    <tr><td>campaigns with max-Jaccard exactly 0</td><td class="num">9,976 / 10,000</td></tr>
+    <tr><td>near-duplicate rate (≥ 0.5)</td><td class="num">0.0000 (0)</td></tr>
+    <tr class="hl"><td>edge novelty rate</td><td class="num pos">0.9982</td></tr>
+    <tr><td>distinct synth edges / fit edges / overlap</td><td class="num">69,293 / 299 / 122</td></tr>
   </tbody>
 </table>
 </div>
@@ -311,8 +326,8 @@ Novelty was never the problem. Fidelity is.</p>
 <table>
   <thead><tr><th>arm</th><th class="num">with attributes</th><th class="num">structural only</th></tr></thead>
   <tbody>
-    <tr><td>real only</td><td class="num">0.903 ± 0.022</td><td class="num pos">0.853 ± 0.024</td></tr>
-    <tr><td>real + synthetic</td><td class="num">0.290 ± 0.031</td><td class="num">0.347 ± 0.026</td></tr>
+    <tr><td>real only</td><td class="num">0.601 ± 0.199</td><td class="num pos">0.688 ± 0.141</td></tr>
+    <tr><td>real + synthetic</td><td class="num">0.171 ± 0.021</td><td class="num">0.193 ± 0.020</td></tr>
   </tbody>
 </table>
 </div>
@@ -327,8 +342,8 @@ Novelty was never the problem. Fidelity is.</p>
 <table>
   <thead><tr><th>model</th><th>top feature</th><th class="num">mass</th><th class="num">structural / attribute</th></tr></thead>
   <tbody>
-    <tr><td>real only</td><td><code>edge_rarity</code></td><td class="num pos">0.977</td><td class="num">0.985 / 0.015</td></tr>
-    <tr><td>real + synthetic</td><td><code>auth_type_NTLM</code></td><td class="num neg">0.944</td><td class="num">0.055 / 0.945</td></tr>
+    <tr><td>real only</td><td><code>edge_rarity</code></td><td class="num pos">0.971</td><td class="num">0.980 / 0.020</td></tr>
+    <tr><td>real + synthetic</td><td><code>auth_type_NTLM</code></td><td class="num neg">0.924</td><td class="num">0.077 / 0.923</td></tr>
   </tbody>
 </table>
 </div>
@@ -336,8 +351,8 @@ Novelty was never the problem. Fidelity is.</p>
 <div class="col">
 <h3>Diagnosis: generative</h3>
 <ul>
-  <li><strong>Not structural</strong> — real-only holds 0.853 on graph structure alone.</li>
-  <li><strong>Not attributional</strong> — dropping attributes costs real-only 0.05 and <em>helps</em> the augmented arm.</li>
+  <li><strong>Not structural</strong> — real-only holds 0.688 on graph structure alone, <em>better</em> than with attributes.</li>
+  <li><strong>Not attributional</strong> — dropping attributes <em>helps both arms</em> (real-only +0.087). On the leaked graph this read as a 0.05 cost; the sign flipped.</li>
   <li><strong>Generative</strong> — at k=13 the augmented positive class is <strong>95.6% synthetic</strong>
   (~14,286 synth events against 650 real). <code>auth_type</code> is 100% NTLM on synthetic <em>and</em>
   real red-team traffic but only 5% of benign. Drowned in synthetic positives, the class-balanced model
@@ -353,28 +368,34 @@ Novelty was never the problem. Fidelity is.</p>
 <table>
   <thead><tr><th>arm</th><th class="num">AUC-PR</th></tr></thead>
   <tbody>
-    <tr class="hl"><td>#1 real-fit ceiling</td><td class="num pos">0.903 ± 0.022</td></tr>
-    <tr class="hl"><td>#3 rarity heuristic — <em>no training at all</em></td><td class="num">0.530</td></tr>
-    <tr><td>real + tuned synthetic</td><td class="num">0.339 ± 0.039</td></tr>
-    <tr><td>#2 real + naive synthetic</td><td class="num">0.343 ± 0.061</td></tr>
-    <tr><td>TSTR — tuned synthetic only</td><td class="num neg">0.060 ± 0.069</td></tr>
-    <tr><td>#2 TSTR — naive synthetic only</td><td class="num neg">0.118 ± 0.096</td></tr>
+    <tr class="hl"><td>#1 real-fit ceiling</td><td class="num pos">0.601 ± 0.199</td></tr>
+    <tr class="hl"><td>#3 rarity heuristic — <em>no training at all</em></td><td class="num neg">0.0082</td></tr>
+    <tr><td>real + tuned synthetic</td><td class="num">0.171 ± 0.021</td></tr>
+    <tr><td>#2 real + naive synthetic</td><td class="num pos">0.255 ± 0.028</td></tr>
+    <tr><td>TSTR — tuned synthetic only</td><td class="num neg">0.033 ± 0.013</td></tr>
+    <tr><td>#2 TSTR — naive synthetic only</td><td class="num neg">0.113 ± 0.037</td></tr>
     <tr><td>chance</td><td class="num">0.000248</td></tr>
   </tbody>
 </table>
 </div>
 
 <div class="col">
-<p><strong>A training-free ranking by edge rarity reaches 0.530 — 59% of the trained detector, and
-~2,100× chance.</strong> Most of what the model "learns" is available without learning anything.
-Any claim that this task needs machine learning has to clear that bar first.</p>
+<p><strong>The training-free baseline collapsed: 0.0082, not 0.530.</strong> This page used to
+say that ranking by edge rarity alone reached 59% of the trained detector, and that any claim this
+task needs machine learning had to clear that bar. <strong>That number was the leak.</strong> On a
+graph built from the whole corpus, no evaluation row could sit on an unseen edge, so rarity
+separated the classes by construction. Bounded to the fit window it scores 33× chance, not 2,100×.
+There is no cheap baseline that already solves this.</p>
 
 <div class="callout">
-  <span class="lbl">Hypothesis refuted</span>
-  <p>We expected the <code>β=1</code> in-degree weighting — which drives the generator onto mega-hub
-  servers — to be the culprit. It is not. The naive generator (β=0, no hub attraction, no credential
-  restriction, random users) is statistically indistinguishable from the tuned one in both the
-  augmented arm (0.343 vs 0.339) and TSTR. <strong>Removing the sophistication changes nothing.</strong></p>
+  <span class="lbl">Reversed by the leak fix</span>
+  <p>This page previously reported the naive generator as statistically indistinguishable from the
+  tuned one, concluding that removing the sophistication changed nothing. On the leak-free graph the
+  naive generator (β=0, no hub attraction, no credential bonus, random users) <strong>beats</strong>
+  the tuned one on <strong>10 of 10 seeds</strong> in the augmented arm (0.255 vs 0.171,
+  p=0.0001) and 9 of 10 in TSTR. <strong>The weighting layers are actively harmful.</strong> They do
+  not explain the whole failure — naive augmentation still costs 0.346 against real-only — so the
+  reading is that the weighting makes a wrong approach worse, not that β=0 makes it right.</p>
 </div>
 
 <h2><span class="num">05</span>Base rate is a choice, and it flatters</h2>
@@ -385,9 +406,9 @@ Any claim that this task needs machine learning has to clear that bar first.</p>
 <table>
   <thead><tr><th>target</th><th class="num">achieved</th><th class="num">negatives</th><th class="num">AUC-PR</th></tr></thead>
   <tbody>
-    <tr class="hl"><td>sampled floor</td><td class="num">1:4,033</td><td class="num">205,612</td><td class="num">0.903 ± 0.022</td></tr>
-    <tr><td>0.001</td><td class="num">1:999</td><td class="num">50,949</td><td class="num">0.974 ± 0.011</td></tr>
-    <tr><td>0.01</td><td class="num">1:99</td><td class="num">5,049</td><td class="num">0.999 ± 0.002</td></tr>
+    <tr class="hl"><td>sampled floor</td><td class="num">1:4,032</td><td class="num">205,612</td><td class="num">0.601 ± 0.199</td></tr>
+    <tr><td>0.001</td><td class="num">1:999</td><td class="num">50,949</td><td class="num">0.763 ± 0.175</td></tr>
+    <tr><td>0.01</td><td class="num">1:99</td><td class="num">5,049</td><td class="num">0.957 ± 0.046</td></tr>
   </tbody>
 </table>
 </div>
@@ -407,16 +428,16 @@ than anything measured here.</strong></p>
 <p>The extrapolation is not small. <strong>4.36% of holdout benign already ranks above the red
 team's 5th-percentile edge_rarity</strong> — about 8,900 rows at 205,612 negatives, but on the order
 of 6.5 million at full window volume, against 51 positives. AUC-PR at deployment volume would be far
-below 0.903. How far is <strong>not estimated here</strong>: the sweep that answers it down-samples
+below 0.601. How far is <strong>not estimated here</strong>: the sweep that answers it down-samples
 positives rather than negatives, and was not run.</p>
 
 <p><strong>Every absolute number on this page is conditional on the 1:4,033 sampled base rate.</strong>
 The comparative results are not — both arms of every comparison sit on the identical holdout, so the
-augmentation deficit, the ablation contrasts, and the rarity baseline's 59%-of-ceiling ratio are
-unaffected.</p>
+augmentation deficit and the ablation contrasts are unaffected by <em>it</em>. (They were not
+unaffected by the graph leak — see section 07.)</p>
 
 <h2><span class="num">06</span>Fidelity — V1 and V2</h2>
-<p class="sub">144,228 rows / 10,000 campaigns</p>
+<p class="sub">161,587 rows / 10,000 campaigns</p>
 </div>
 
 <div class="scroll">
@@ -441,10 +462,10 @@ cannot occur by construction. Reporting it as "passed" would be dishonest.</p>
 <table>
   <thead><tr><th>V2 field</th><th class="num">KS D</th><th class="num">p</th><th class="num">median s/r</th><th class="num">mean s/r</th></tr></thead>
   <tbody>
-    <tr><td>breadth</td><td class="num">0.188</td><td class="num">0.684</td><td class="num">9 / 9</td><td class="num">14.4 / 27.9</td></tr>
+    <tr><td>breadth</td><td class="num">0.154</td><td class="num">0.875</td><td class="num">9 / 9</td><td class="num">14.4 / 27.9</td></tr>
     <tr><td>inter-event Δt</td><td class="num">0.004</td><td class="num">1.000</td><td class="num">87 / 90</td><td class="num">340 / 344</td></tr>
-    <tr><td>creds per campaign</td><td class="num">0.358</td><td class="num">0.054</td><td class="num">2 / 4</td><td class="num">2.98 / 11.38</td></tr>
-    <tr class="hl"><td>dst in-degree <span class="pill miss">JS 0.350 · target &lt;0.1</span></td><td class="num">—</td><td class="num">—</td><td class="num">11,659 / 20</td><td class="num">8,474 / 1,129</td></tr>
+    <tr><td>creds per campaign</td><td class="num">0.352</td><td class="num">0.064</td><td class="num">2 / 4</td><td class="num">2.98 / 11.38</td></tr>
+    <tr class="hl"><td>dst in-degree <span class="pill miss">JS 0.290 · target &lt;0.1</span></td><td class="num">—</td><td class="num">—</td><td class="num">1,544 / 12</td><td class="num">—</td></tr>
   </tbody>
 </table>
 </div>
@@ -465,8 +486,8 @@ against 10,000 synthetic, KS has almost no power; a non-rejection is not a fit. 
   computed. Both sides are constant by measurement.</li>
 </ul>
 
-<h2><span class="num">07</span>Two defects found during evaluation</h2>
-<p class="sub">both produce better-looking numbers — which is why they were worth chasing</p>
+<h2><span class="num">07</span>Four defects found during evaluation</h2>
+<p class="sub">every one produced better-looking numbers — which is why they were worth chasing</p>
 
 <h3>7.1 — The benign sampler made the classes edge-disjoint</h3>
 <p>The Day-3 sampler dropped every benign row whose edge was a red-team edge. The 51 holdout positives
@@ -484,9 +505,37 @@ Python randomizes string hashing per process, so a fixed seed produced a differe
 Caught by reconciling three runs that should have been identical: the real-only arm matched
 bit-for-bit, while synthetic event counts came out 14,071 vs 13,953 vs 14,804.</p>
 <p>Fixed with <code>sorted()</code>, guarded by a test that runs the generator in two subprocesses
-under different <code>PYTHONHASHSEED</code> values — an in-process check cannot catch this. All numbers
-above predate the fix, so they are <em>independent draws</em>. That strengthens the headline rather
-than weakening it: all 15 independent k=13 draws show large harm.</p>
+under different <code>PYTHONHASHSEED</code> values — an in-process check cannot catch this.</p>
+
+<h3>7.3 — The base rate was described as a floor it is not</h3>
+<p>The holdout's 1:4,032 ratio was reported as the deployment's "natural floor". It is a
+<strong>sampling choice</strong>: the negatives are a draw from a window holding ~149M events, so the
+deployment rate is nearer <strong>1:2.9M</strong>, ~725× rarer. Absolute numbers are conditional on
+the sampled rate; comparative numbers are not.</p>
+
+<h3>7.4 — The graph was built from the whole corpus, including the future</h3>
+<p>The largest of the four, and the last found. It invalidated every headline number in the previous
+version of this page.</p>
+<p>The machine graph and credential-location map were aggregated over all 58 days. They feed
+<code>build_features</code>, which scores <strong>holdout</strong> rows — so an edge's weight, and
+therefore <code>edge_rarity</code>, was computed partly from the evaluation window itself. They also
+feed the walker, so synthetic campaigns could route over edges that did not exist yet.</p>
+<table>
+  <thead><tr><th>rows on an edge the graph never saw</th><th class="num">full-corpus graph</th><th class="num">fit-window graph</th></tr></thead>
+  <tbody>
+    <tr><td>holdout benign (205,612)</td><td class="num neg">0.0000%</td><td class="num">1.5082% (3,101)</td></tr>
+    <tr><td>holdout red team (51)</td><td class="num neg">0.0000%</td><td class="num">17.6471% (9)</td></tr>
+  </tbody>
+</table>
+<p>Read the first column. On the full-corpus graph <strong>nothing in the evaluation set can be
+new</strong>, for either class — the graph contains every holdout row's own edge by construction. It
+was a perfect oracle of which machine pairs would ever occur, and "this pair is new" — the extreme of
+the detector's strongest feature — was unreachable at evaluation time. Bounded to the fit window,
+those 3,101 first-time-seen benign rows tie 9 of the 51 positives at maximum rarity. That is the real
+deployment problem: new hires and new projects produce first-time pairs constantly.</p>
+<p><strong>Cost: real-only 0.9026 → 0.4122; rarity baseline 0.530 → 0.0082.</strong></p>
+<p><strong>Why it survived:</strong> a <code>t_hi</code> bound existed on two of the aggregates and
+was covered by tests. No caller passed it. A guard nothing calls is documentation, not a fix.</p>
 
 <h2><span class="num">08</span>The insight worth carrying</h2>
 </div>
@@ -541,8 +590,9 @@ by construction and under-represents the red team's skew. The drift is real; its
   pulls the detector onto a coarse tooling attribute.</p>
   <p>The honest framing for anything built on this: <strong>the generator reproduces this operator's
   campaign shape, not its detectable structure.</strong></p>
-  <p>The most useful number in the study required no machine learning at all — a rarity heuristic at
-  0.530, 59% of the trained ceiling. Before adding synthesis, that is the bar.</p>
+  <p>This study's most-quoted number — a training-free rarity heuristic at 59% of the trained
+  ceiling — did not survive its own audit. It was 0.530 on a leaked graph and is <strong>0.0082</strong>
+  on a correct one. The bar is lower than v1 claimed, which makes the problem more open, not less.</p>
 </div>
 
 <footer>
